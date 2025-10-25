@@ -1,0 +1,12 @@
+# Web server and framework
+Flask
+gunicorn
+
+# Data processing and optimization
+numpy
+scipy
+pandas
+scikit-optimize
+
+# Google Sheets API integration
+gspread
