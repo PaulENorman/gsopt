@@ -1,3 +1,46 @@
+# =======================================================================================
+#  SECURITY NOTE FOR CLOUD RUN
+# =======================================================================================
+# To allow any authenticated Google user to access this service (but block anonymous
+# traffic), you must grant the "Cloud Run Invoker" role to the special identifier
+# "allAuthenticatedUsers". This allows the Google Apps Script to securely call the API.
+#
+# The recommended way to do this is with the gcloud command-line tool.
+#
+# ---
+# 1. VERIFY CURRENT PERMISSIONS (to debug 401/403 errors)
+# ---
+# Run this command first to see who currently has permission to invoke your service.
+# Replace `[SERVICE_NAME]` and `[REGION]` with your service's details.
+#
+# gcloud run services get-iam-policy [SERVICE_NAME] --region="[REGION]"
+#
+# In the output, you are looking for a section like this. If it's missing,
+# that is the cause of the authorization error.
+#
+#   - members:
+#     - allAuthenticatedUsers
+#     role: roles/run.invoker
+#
+# ---
+# 2. SET THE CORRECT PERMISSION
+# ---
+# Run the following command to grant the permission. This command is safe to run
+# even if the permission already exists.
+#
+# gcloud run services add-iam-policy-binding [SERVICE_NAME] \
+#   --member="allAuthenticatedUsers" \
+#   --role="roles/run.invoker" \
+#   --region="[REGION]"
+#
+# IMPORTANT: After running the `add-iam-policy-binding` command, please wait
+# 1-2 minutes for the change to propagate across Google's systems before testing
+# again. Testing too quickly may result in a temporary 401 "Not Authorized" error.
+#
+# The Google Apps Script must be configured to send an identity token with each
+# request for this to work.
+# =======================================================================================
+
 import pandas as pd
 from dataclasses import dataclass
 from flask import Flask, request, jsonify
@@ -429,6 +472,47 @@ def continue_optimization():
     except Exception as e:
         logger.error(f"Failed to continue optimization: {str(e)}", exc_info=True)
         return jsonify({"status": "error", "message": "Failed to continue optimization"}), 500
+
+@app.route('/test-connection', methods=['POST'])
+def test_connection():
+    """
+    Tests the connection to Google Sheets by writing to a specific cell.
+    
+    Returns:
+        JSON response with status and message.
+    """
+    try:
+        data = request.get_json()
+        spreadsheet_id = data.get('spreadsheet_id')
+        if not spreadsheet_id:
+            return jsonify({"status": "error", "message": "spreadsheet_id is required"}), 400
+
+        logger.info(f"Testing connection for sheet: {spreadsheet_id}")
+        
+        range_name = "Optimizer Settings!G3"
+        body = {'values': [['connection verified']]}
+        
+        sheet.values().update(
+            spreadsheetId=spreadsheet_id,
+            range=range_name,
+            valueInputOption='RAW',
+            body=body
+        ).execute()
+        
+        logger.info(f"Successfully wrote to sheet: {spreadsheet_id}")
+        return jsonify({"status": "success", "message": "Connection verified. Check cell G3 in 'Optimizer Settings' sheet."})
+
+    except Exception as e:
+        logger.error(f"Failed to verify connection: {str(e)}", exc_info=True)
+        # Attempt to write a failure message, though it may also fail
+        try:
+            range_name = "Optimizer Settings!G3"
+            body = {'values': [['Can not connect']]}
+            sheet.values().update(spreadsheetId=spreadsheet_id, range=range_name, valueInputOption='RAW', body=body).execute()
+        except Exception as inner_e:
+            logger.error(f"Also failed to write error status to sheet: {str(inner_e)}", exc_info=True)
+
+        return jsonify({"status": "error", "message": "Failed to connect to Google Sheet. Check permissions and spreadsheet ID."}), 500
 
 if __name__ == '__main__':
     # The app no longer loads settings on startup, as it needs a spreadsheet_id first.
