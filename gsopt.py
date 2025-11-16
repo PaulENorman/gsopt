@@ -4,7 +4,6 @@ from flask import Flask, request, jsonify
 import numpy as np
 from skopt import Optimizer
 from skopt.space import Real
-from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from typing import Dict, List, Any, Optional, Tuple
 import logging
