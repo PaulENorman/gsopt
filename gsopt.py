@@ -8,6 +8,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from typing import Dict, List, Any, Optional, Tuple
 import logging
+import google.auth
 
 # Configure logging with timestamp and log level
 logging.basicConfig(
@@ -32,18 +33,17 @@ class OptimizerSettings:
     batch_size: int
 
 # Google Sheets API configuration
-SERVICE_ACCOUNT_FILE = '/Users/paulnorman/Desktop/gs_opt/gsopt/causal-fact-466200-q7-e5c7f715695c.json'
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-SPREADSHEET_ID = '14Bvif_dxiQ8STzE1sDF2SC2EU72Sn8iFNQaFYfKhu2Y'
 
 # Initialize Google Sheets API client
-creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+# The client will automatically find credentials from the environment when running on GCP.
+creds, project = google.auth.default(scopes=SCOPES)
 service = build('sheets', 'v4', credentials=creds)
 sheet = service.spreadsheets()
 
-def get_optimizer_settings(sheet, sheet_name: str) -> OptimizerSettings:
+def get_optimizer_settings(sheet, spreadsheet_id: str, sheet_name: str) -> OptimizerSettings:
     """
-    Reads optimizer configuration from the Optimizer Settings sheet.
+    Reads optimizer configuration from the specified Optimizer Settings sheet.
     
     Expected sheet layout:
         B2: Base estimator (e.g., "Gaussian Process (GP)")
@@ -57,6 +57,7 @@ def get_optimizer_settings(sheet, sheet_name: str) -> OptimizerSettings:
     
     Args:
         sheet: Google Sheets API resource
+        spreadsheet_id: ID of the spreadsheet containing optimizer settings
         sheet_name: Name of the sheet containing optimizer settings
         
     Returns:
@@ -64,7 +65,7 @@ def get_optimizer_settings(sheet, sheet_name: str) -> OptimizerSettings:
     """
     def _fetch(range_a1: str) -> List[List[Any]]:
         """Fetch values from a sheet range."""
-        result = sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=range_a1).execute()
+        result = sheet.values().get(spreadsheetId=spreadsheet_id, range=range_a1).execute()
         return result.get('values', []) or []
 
     def _first_cell(range_a1: str) -> Optional[str]:
@@ -164,9 +165,9 @@ def get_optimizer_settings(sheet, sheet_name: str) -> OptimizerSettings:
         batch_size=batch_size
     )
 
-def get_data_from_sheet(sheet, sheet_name: str, num_params: int) -> pd.DataFrame:
+def get_data_from_sheet(sheet, spreadsheet_id: str, sheet_name: str, num_params: int) -> pd.DataFrame:
     """
-    Reads optimization data from the Data sheet.
+    Reads optimization data from the specified Data sheet.
     
     Expected layout:
         Row 3: Headers (parameter names + objective column)
@@ -174,6 +175,7 @@ def get_data_from_sheet(sheet, sheet_name: str, num_params: int) -> pd.DataFrame
         
     Args:
         sheet: Google Sheets API resource
+        spreadsheet_id: ID of the spreadsheet containing the data
         sheet_name: Name of the data sheet
         num_params: Number of parameter columns to read
         
@@ -181,7 +183,8 @@ def get_data_from_sheet(sheet, sheet_name: str, num_params: int) -> pd.DataFrame
         DataFrame with parameter columns and one objective column
     """
     def _fetch(range_a1: str) -> List[List[Any]]:
-        result = sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=range_a1).execute()
+        # Use the passed-in spreadsheet_id
+        result = sheet.values().get(spreadsheetId=spreadsheet_id, range=range_a1).execute()
         return result.get('values', []) or []
     
     # Fetch data starting from row 3 (headers)
@@ -209,16 +212,18 @@ def build_and_train_optimizer(
     dimensions: Dict[str, Tuple[float, float]], 
     base_estimator: str, 
     acq_func: str, 
-    num_params: int
+    num_params: int,
+    spreadsheet_id: str  # Pass spreadsheet_id here
 ) -> Optimizer:
     """
-    Creates and trains a Bayesian optimizer with existing data.
+    Creates and trains a Bayesian optimizer with existing data from a specific sheet.
     
     Args:
         dimensions: Dict mapping parameter names to (min, max) tuples
         base_estimator: Type of surrogate model (e.g., 'GP', 'ET', 'RF')
         acq_func: Acquisition function (e.g., 'EI', 'PI', 'LCB')
         num_params: Number of optimization parameters
+        spreadsheet_id: ID of the spreadsheet containing the data
         
     Returns:
         Trained Optimizer instance
@@ -236,9 +241,9 @@ def build_and_train_optimizer(
     )
     logger.info(f"Initialized optimizer with base_estimator={base_estimator}, acq_func={acq_func}")
     
-    # Load existing data from sheet
-    df_data = get_data_from_sheet(sheet, "Data", num_params)
-    logger.info(f"Retrieved data from sheet: shape={df_data.shape}")
+    # Load existing data from the specified sheet
+    df_data = get_data_from_sheet(sheet, spreadsheet_id, "Data", num_params)
+    logger.info(f"Retrieved data from sheet {spreadsheet_id}: shape={df_data.shape}")
     
     if not df_data.empty and len(df_data.columns) > num_params:
         objective_col = df_data.columns[num_params]
@@ -275,14 +280,15 @@ def build_and_train_optimizer(
     
     return optimizer
 
-def write_data_to_sheet(sheet, data_df: pd.DataFrame, sheet_name: str = "Data") -> None:
+def write_data_to_sheet(sheet, spreadsheet_id: str, data_df: pd.DataFrame, sheet_name: str = "Data") -> None:
     """
-    Writes data to the Data sheet starting at row 4.
+    Writes data to the specified Data sheet starting at row 4.
     
     Overwrites any existing data. Headers in row 3 are assumed to be pre-populated.
     
     Args:
         sheet: Google Sheets API resource
+        spreadsheet_id: ID of the spreadsheet to write to
         data_df: DataFrame to write (without headers)
         sheet_name: Name of the target sheet
     """
@@ -293,23 +299,24 @@ def write_data_to_sheet(sheet, data_df: pd.DataFrame, sheet_name: str = "Data") 
     body = {'values': values}
     
     sheet.values().update(
-        spreadsheetId=SPREADSHEET_ID,
+        spreadsheetId=spreadsheet_id,  # Use the passed-in spreadsheet_id
         range=range_name,
         valueInputOption='RAW',
         body=body
     ).execute()
 
-def append_data_to_sheet(sheet, data_df: pd.DataFrame, sheet_name: str = "Data") -> None:
+def append_data_to_sheet(sheet, spreadsheet_id: str, data_df: pd.DataFrame, sheet_name: str = "Data") -> None:
     """
-    Appends data to the Data sheet at the next available row.
+    Appends data to the specified Data sheet at the next available row.
     
     Args:
         sheet: Google Sheets API resource
+        spreadsheet_id: ID of the spreadsheet to append to
         data_df: DataFrame to append (without headers)
         sheet_name: Name of the target sheet
     """
     def _fetch(range_a1: str) -> List[List[Any]]:
-        result = sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=range_a1).execute()
+        result = sheet.values().get(spreadsheetId=spreadsheet_id, range=range_a1).execute()
         return result.get('values', []) or []
     
     # Find next empty row
@@ -324,7 +331,7 @@ def append_data_to_sheet(sheet, data_df: pd.DataFrame, sheet_name: str = "Data")
     body = {'values': values}
     
     sheet.values().update(
-        spreadsheetId=SPREADSHEET_ID,
+        spreadsheetId=spreadsheet_id, # Use the passed-in spreadsheet_id
         range=range_name,
         valueInputOption='RAW',
         body=body
@@ -333,26 +340,32 @@ def append_data_to_sheet(sheet, data_df: pd.DataFrame, sheet_name: str = "Data")
 @app.route('/init-optimization', methods=['POST'])
 def init_optimization():
     """
-    Initialize optimization by generating and writing initial exploration points.
+    Initialize optimization for a specific spreadsheet.
     
     Returns:
         JSON response with status and message
     """
     try:
-        logger.info("Starting optimization initialization")
+        data = request.get_json()
+        spreadsheet_id = data.get('spreadsheet_id')
+        if not spreadsheet_id:
+            return jsonify({"status": "error", "message": "spreadsheet_id is required"}), 400
+
+        logger.info(f"Starting optimization initialization for sheet: {spreadsheet_id}")
         
-        # Build parameter space from settings
+        optimizer_settings = get_optimizer_settings(sheet, spreadsheet_id, "Optimizer Settings")
+        
         dimensions = {
             name: (optimizer_settings.param_mins[i], optimizer_settings.param_maxes[i])
             for i, name in enumerate(optimizer_settings.param_names)
         }
         
-        # Create optimizer and train on any existing data
         optimizer = build_and_train_optimizer(
             dimensions,
             optimizer_settings.base_estimator,
             optimizer_settings.acquisition_function,
-            optimizer_settings.num_params
+            optimizer_settings.num_params,
+            spreadsheet_id  # Pass the ID through
         )
         
         # Generate initial points
@@ -363,8 +376,8 @@ def init_optimization():
         df = pd.DataFrame(initial_points, columns=optimizer_settings.param_names)
         df['object'] = ''
         
-        write_data_to_sheet(sheet, df)
-        logger.info("Successfully wrote initial points to sheet")
+        write_data_to_sheet(sheet, spreadsheet_id, df)
+        logger.info(f"Successfully wrote initial points to sheet: {spreadsheet_id}")
 
         return jsonify({"status": "success", "message": "Optimization initialized successfully"})
     except Exception as e:
@@ -374,26 +387,32 @@ def init_optimization():
 @app.route('/continue-optimization', methods=['POST'])
 def continue_optimization():
     """
-    Continue optimization by generating and appending a new batch of suggested points.
+    Continue optimization for a specific spreadsheet.
     
     Returns:
         JSON response with status and message
     """
     try:
-        logger.info("Continuing optimization")
+        data = request.get_json()
+        spreadsheet_id = data.get('spreadsheet_id')
+        if not spreadsheet_id:
+            return jsonify({"status": "error", "message": "spreadsheet_id is required"}), 400
+
+        logger.info(f"Continuing optimization for sheet: {spreadsheet_id}")
         
-        # Build parameter space from settings
+        optimizer_settings = get_optimizer_settings(sheet, spreadsheet_id, "Optimizer Settings")
+
         dimensions = {
             name: (optimizer_settings.param_mins[i], optimizer_settings.param_maxes[i])
             for i, name in enumerate(optimizer_settings.param_names)
         }
         
-        # Create and train optimizer with all existing data
         optimizer = build_and_train_optimizer(
             dimensions,
             optimizer_settings.base_estimator,
             optimizer_settings.acquisition_function,
-            optimizer_settings.num_params
+            optimizer_settings.num_params,
+            spreadsheet_id # Pass the ID through
         )
         
         # Generate new batch of points
@@ -404,8 +423,8 @@ def continue_optimization():
         df_new = pd.DataFrame(new_points, columns=optimizer_settings.param_names)
         df_new['object'] = ''
         
-        append_data_to_sheet(sheet, df_new)
-        logger.info("Successfully appended new points to sheet")
+        append_data_to_sheet(sheet, spreadsheet_id, df_new)
+        logger.info(f"Successfully appended new points to sheet: {spreadsheet_id}")
         
         return jsonify({"status": "success", "message": "Optimization continued successfully"})
     except Exception as e:
@@ -413,9 +432,5 @@ def continue_optimization():
         return jsonify({"status": "error", "message": "Failed to continue optimization"}), 500
 
 if __name__ == '__main__':
-    logger.info("Loading optimizer settings")
-    optimizer_settings = get_optimizer_settings(sheet, "Optimizer Settings")
-    logger.info(f"Optimizer settings loaded: {optimizer_settings.num_params} parameters, "
-                f"{optimizer_settings.num_init_points} initial points, "
-                f"batch_size={optimizer_settings.batch_size}")
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    # The app no longer loads settings on startup, as it needs a spreadsheet_id first.
+    app.run(host='0.0.0.0', port=8080, debug=False)
