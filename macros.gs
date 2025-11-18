@@ -1,4 +1,25 @@
 /**
+ * =======================================================================================
+ *  HOW TO INSTALL AND USE
+ * =======================================================================================
+ * 
+ *  CRITICAL STEP FOR AUTHENTICATION: LINK TO YOUR GCP PROJECT
+ * 
+ *  To fix 401 Unauthorized errors, your Apps Script project MUST be linked to your
+ *  Cloud Run project (`gsopt-478412`).
+ * 
+ *  1. In the Apps Script editor, click the "Project Settings" icon (a gear ⚙️) on the left.
+ *  2. Scroll down to the "Google Cloud Platform (GCP) Project" section.
+ *  3. Click the "Change project" button.
+ *  4. Paste your GCP Project Number into the box. (You can find this on the GCP Console
+ *     Dashboard; for project `gsopt-478412`, it is likely `449559265504`).
+ *  5. Click "Set project".
+ *  6. A "Cloud Platform project successfully associated" message will appear.
+ * 
+ *  After doing this, you may need to re-authorize the script the next time you run it.
+ *  This step ensures the identity token sent to Cloud Run is from a trusted project.
+ * 
+ * =======================================================================================
  * @OnlyCurrentDoc
  *
  * The above comment directs Apps Script to limit the scope of file
@@ -141,40 +162,40 @@ function generateParameterRanges(sheet) {
 }
 
 /**
- * Calls the /init-optimization endpoint.
+ * Reads optimizer settings from the "Optimizer Settings" sheet.
+ * @returns {Object} Settings object with all optimizer configuration
  */
-function initOptimization() {
-  callOptimizerEndpoint('/init-optimization', 'Initializing optimization and generating first points...');
-}
-
-/**
- * Calls the /continue-optimization endpoint.
- */
-function continueOptimization() {
-  callOptimizerEndpoint('/continue-optimization', 'Requesting next batch of points...');
-}
-
-/**
- * Calls the /test-connection endpoint of the Cloud Run service.
- */
-function testCloudRunConnection() {
-  callOptimizerEndpoint('/test-connection', 'Sending test request to the optimizer service...');
-}
-
-/**
- * A generic helper function to call an endpoint on the Cloud Run service.
- * @param {string} endpoint The API endpoint to call (e.g., '/init-optimization').
- * @param {string} initialMessage The message to show in the UI alert when starting.
- */
-function callOptimizerEndpoint(endpoint, initialMessage) {
-  const ui = SpreadsheetApp.getUi();
+function readOptimizerSettings() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Optimizer Settings");
   
-
-  const spreadsheetId = SpreadsheetApp.getActiveSpreadsheet().getId();
-  const payload = {
-    spreadsheet_id: spreadsheetId
-  };
-
+  function parseParens(str) {
+    if (!str) return str;
+    const match = str.match(/\(([^)]+)\)/);
+    return match ? match[1] : str;
+  }
+  
+  const baseEstimator = parseParens(sheet.getRange("B2").getValue());
+  const acquisitionFunction = parseParens(sheet.getRange("B3").getValue());
+  const numInitPoints = parseInt(sheet.getRange("B4").getValue()) || 10;
+  const batchSize = parseInt(sheet.getRange("B5").getValue()) || 5;
+  const numParams = parseInt(sheet.getRange("B7").getValue()) || 0;
+  
+  // Read parameter specifications starting from row 9
+  const paramNames = [];
+  const paramMins = [];
+  const paramMaxes = [];
+  
+  for (let i = 0; i < numParams; i++) {
+    const row = 9 + i;
+    paramNames.push(sheet.getRange(`A${row}`).getValue() || `parameter${i+1}`);
+    paramMins.push(parseFloat(sheet.getRange(`B${row}`).getValue()) || 0);
+    paramMaxes.push(parseFloat(sheet.getRange(`C${row}`).getValue()) || 10);
+  }
+  
+  return {
+    base_estimator: baseEstimator,
+    acquisition_function: acquisitionFunction,
+    num_init_points: numInitPoints
   // Generate an identity token to authenticate with Cloud Run.
   const token = ScriptApp.getIdentityToken();
 
