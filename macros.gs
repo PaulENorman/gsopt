@@ -1,31 +1,3 @@
-/**
- * =======================================================================================
- *  HOW TO INSTALL AND USE
- * =======================================================================================
- * 
- *  CRITICAL STEP FOR AUTHENTICATION: LINK TO YOUR GCP PROJECT
- * 
- *  To fix 401 Unauthorized errors, your Apps Script project MUST be linked to your
- *  Cloud Run project (`gsopt-478412`).
- * 
- *  1. In the Apps Script editor, click the "Project Settings" icon (a gear ⚙️) on the left.
- *  2. Scroll down to the "Google Cloud Platform (GCP) Project" section.
- *  3. Click the "Change project" button.
- *  4. Paste your GCP Project Number into the box. (You can find this on the GCP Console
- *     Dashboard; for project `gsopt-478412`, it is likely `449559265504`).
- *  5. Click "Set project".
- *  6. A "Cloud Platform project successfully associated" message will appear.
- * 
- *  After doing this, you may need to re-authorize the script the next time you run it.
- *  This step ensures the identity token sent to Cloud Run is from a trusted project.
- * 
- * =======================================================================================
- * @OnlyCurrentDoc
- *
- * The above comment directs Apps Script to limit the scope of file
- * access for this script to only the current document.
- */
-
 // Replace this with the URL of your deployed Cloud Run service.
 const CLOUD_RUN_URL = 'https://gsopt-449559265504.europe-west1.run.app'; 
 
@@ -195,20 +167,48 @@ function readOptimizerSettings() {
   return {
     base_estimator: baseEstimator,
     acquisition_function: acquisitionFunction,
-    num_init_points: numInitPoints
-  // Generate an identity token to authenticate with Cloud Run.
-  const token = ScriptApp.getIdentityToken();
+    num_init_points: numInitPoints,
+    batch_size: batchSize,
+    num_params: numParams,
+    param_names: paramNames,
+    param_mins: paramMins,
+    param_maxes: paramMaxes
+  };
+}
+
+/**
+ * Helper function to call Cloud Run endpoint with authentication.
+ * @param {string} endpoint - The API endpoint to call
+ * @param {Object} payload - The request payload
+ * @param {string} initialMessage - Message to show while processing
+ */
+function callCloudRunEndpoint(endpoint, payload, initialMessage) {
+  const ui = SpreadsheetApp.getUi();
+  
+  // Generate an identity token to authenticate with Cloud Run
+  let token;
+  try {
+    token = ScriptApp.getIdentityToken();
+  } catch (e) {
+    console.error('Failed to get identity token:', e);
+    // Continue without token - let the server decide if it's required
+    token = '';
+  }
 
   const options = {
     method: 'post',
     contentType: 'application/json',
     payload: JSON.stringify(payload),
-    muteHttpExceptions: true, // Prevents script from stopping on HTTP errors
-    headers: {
-      // Add the token to the Authorization header.
+    muteHttpExceptions: true,
+    headers: token ? {
       'Authorization': 'Bearer ' + token
-    }
+    } : {}
   };
+
+  // Log request details for debugging
+  console.log('Calling endpoint: ' + CLOUD_RUN_URL + endpoint);
+  console.log('Payload keys: ' + Object.keys(payload).join(', '));
+  console.log('Has token:', token ? 'yes' : 'no');
 
   ui.alert('In Progress', initialMessage, ui.ButtonSet.OK);
 
@@ -217,29 +217,77 @@ function readOptimizerSettings() {
     const responseCode = response.getResponseCode();
     const responseBody = response.getContentText();
 
+    console.log('Response code: ' + responseCode);
+
     if (responseCode === 200) {
-      // Success case
       const jsonResponse = JSON.parse(responseBody);
       ui.alert('Success', jsonResponse.message, ui.ButtonSet.OK);
-    } else {
-      // Error case: The server responded with something other than 200 OK.
-      const errorTitle = `Error: Service responded with code ${responseCode}`;
-      const errorMessage = `The server returned an unexpected response. This is usually a "Not Found" error or a server crash.\n\nCheck the Apps Script logs for the full server response.`;
+      return jsonResponse;
+    } else if (responseCode === 401 || responseCode === 403) {
+      const errorTitle = `Authentication Error (${responseCode})`;
+      const errorMessage = 
+        'The Cloud Run service rejected the request.\n\n' +
+        'This usually means:\n' +
+        '1. Your Google account is not a Gmail account\n' +
+        '2. The identity token could not be validated\n\n' +
+        'Full error logged to console.';
       
-      // Log the full HTML response for debugging.
       console.error(errorTitle);
-      console.error("Full server response below:");
-      console.error(responseBody);
+      console.error('Response body: ' + responseBody);
       
       ui.alert(errorTitle, errorMessage, ui.ButtonSet.OK);
+      return null;
+    } else {
+      const errorTitle = `Error: Service responded with code ${responseCode}`;
+      const errorMessage = `The server returned an unexpected response.\n\nCheck the Apps Script logs (View → Logs) for details.`;
+      
+      console.error(errorTitle);
+      console.error('Response body: ' + responseBody);
+      
+      ui.alert(errorTitle, errorMessage, ui.ButtonSet.OK);
+      return null;
     }
   } catch (e) {
-    // Fatal error case: Could not connect or another script error occurred.
     const fatalErrorTitle = 'Fatal Error';
-    const fatalErrorMessage = 'Could not reach the optimizer service or the response was not valid JSON.\n\nError: ' + e.toString() + '\n\nCheck the Apps Script logs for details.';
+    const fatalErrorMessage = 
+      'Could not reach the optimizer service.\n\n' +
+      'Error: ' + e.toString() + '\n\n' +
+      'Check:\n' +
+      '1. Cloud Run URL is correct: ' + CLOUD_RUN_URL + '\n' +
+      '2. Service is deployed and running\n' +
+      '3. Apps Script logs (View → Logs) for details';
     
     console.error(fatalErrorTitle, fatalErrorMessage);
+    console.error('Full error:', e);
     
     ui.alert(fatalErrorTitle, fatalErrorMessage, ui.ButtonSet.OK);
+    return null;
   }
+}
+
+/**
+ * Initialize optimization - generates initial points to evaluate.
+ */
+function initOptimization() {
+  const settings = readOptimizerSettings();
+  const payload = { settings: settings };
+  callCloudRunEndpoint('/init-optimization', payload, 'Initializing optimization...');
+}
+
+/**
+ * Continue optimization - generates next batch of points based on results.
+ */
+function continueOptimization() {
+  const settings = readOptimizerSettings();
+  // TODO: Read existing data from results sheet
+  const existingData = [];
+  const payload = { settings: settings, existing_data: existingData };
+  callCloudRunEndpoint('/continue-optimization', payload, 'Generating next batch...');
+}
+
+/**
+ * Test connection to Cloud Run service.
+ */
+function testCloudRunConnection() {
+  callCloudRunEndpoint('/test-connection', {}, 'Testing connection...');
 }

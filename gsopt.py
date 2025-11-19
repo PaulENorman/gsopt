@@ -6,6 +6,9 @@ from skopt import Optimizer
 from skopt.space import Real
 from typing import Dict, List, Any, Optional, Tuple
 import logging
+import jwt
+from jwt import PyJWKClient
+import os
 
 # Configure logging with timestamp and log level
 logging.basicConfig(
@@ -16,6 +19,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+# Google's JWKS endpoint for validating identity tokens
+GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 
 @dataclass
 class OptimizerSettings:
@@ -31,28 +37,74 @@ class OptimizerSettings:
 
 def authenticate_request(request) -> Tuple[bool, Optional[str], Optional[str]]:
     """
-    Validates the authenticated user from Cloud Run's authentication headers.
+    Validates the authenticated user from JWT token or Cloud Run headers.
     
     Returns:
         Tuple of (is_valid, email, error_message)
     """
+    # First, check if there's a Bearer token
+    auth_header = request.headers.get('Authorization', '')
+    
+    if auth_header.startswith('Bearer '):
+        token = auth_header.split('Bearer ')[1]
+        
+        try:
+            # Validate the JWT token
+            jwks_client = PyJWKClient(GOOGLE_JWKS_URL)
+            signing_key = jwks_client.get_signing_key_from_jwt(token)
+            
+            # Decode and verify the token
+            decoded_token = jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=["RS256"],
+                options={"verify_exp": True}
+            )
+            
+            # Extract email from token
+            email = decoded_token.get('email')
+            
+            if not email:
+                logger.warning("No email found in JWT token")
+                return False, None, "Invalid token: no email claim"
+            
+            # Check if it's a Gmail account
+            if not email.endswith('@gmail.com'):
+                logger.warning(f"Access denied for non-Gmail account: {email}")
+                return False, None, f"Access denied: Must use a Gmail account. Got: {email}"
+            
+            logger.info(f"Authenticated user via JWT: {email}")
+            return True, email, None
+            
+        except jwt.ExpiredSignatureError:
+            logger.warning("JWT token has expired")
+            return False, None, "Token has expired"
+        except jwt.InvalidTokenError as e:
+            logger.warning(f"Invalid JWT token: {str(e)}")
+            return False, None, f"Invalid token: {str(e)}"
+        except Exception as e:
+            logger.error(f"Error validating JWT token: {str(e)}", exc_info=True)
+            return False, None, f"Token validation error: {str(e)}"
+    
+    # Fallback: Check Cloud Run authentication headers
     authenticated_email = request.headers.get('X-Goog-Authenticated-User-Email')
     
-    if not authenticated_email:
-        logger.warning("No authenticated email found in request headers")
-        return False, None, "Unauthorized: No authentication token provided"
+    if authenticated_email:
+        # Remove the "accounts.google.com:" prefix if present
+        if authenticated_email.startswith('accounts.google.com:'):
+            authenticated_email = authenticated_email.replace('accounts.google.com:', '')
+        
+        # Check if it's a Gmail account
+        if not authenticated_email.endswith('@gmail.com'):
+            logger.warning(f"Access denied for non-Gmail account: {authenticated_email}")
+            return False, None, f"Access denied: Must use a Gmail account. Got: {authenticated_email}"
+        
+        logger.info(f"Authenticated user via Cloud Run header: {authenticated_email}")
+        return True, authenticated_email, None
     
-    # Remove the "accounts.google.com:" prefix if present
-    if authenticated_email.startswith('accounts.google.com:'):
-        authenticated_email = authenticated_email.replace('accounts.google.com:', '')
-    
-    # Validate Gmail account (or check against approved list)
-    if not authenticated_email.endswith('@gmail.com'):
-        logger.warning(f"Access denied for non-Gmail account: {authenticated_email}")
-        return False, None, f"Access denied: Must use a Gmail account. Got: {authenticated_email}"
-    
-    logger.info(f"Authenticated user: {authenticated_email}")
-    return True, authenticated_email, None
+    # No authentication found
+    logger.warning("No authentication token or header found")
+    return False, None, "No authentication provided"
 
 def parse_optimizer_settings(settings_data: Dict[str, Any]) -> OptimizerSettings:
     """
@@ -155,7 +207,7 @@ def init_optimization():
     """
     is_valid, email, error_msg = authenticate_request(request)
     if not is_valid:
-        return jsonify({"status": "error", "message": error_msg}), 401 if "Unauthorized" in error_msg else 403
+        return jsonify({"status": "error", "message": error_msg}), 403
 
     try:
         data = request.get_json()
@@ -216,7 +268,7 @@ def continue_optimization():
     """
     is_valid, email, error_msg = authenticate_request(request)
     if not is_valid:
-        return jsonify({"status": "error", "message": error_msg}), 401 if "Unauthorized" in error_msg else 403
+        return jsonify({"status": "error", "message": error_msg}), 403
 
     try:
         data = request.get_json()
@@ -273,7 +325,7 @@ def test_connection():
     """
     is_valid, email, error_msg = authenticate_request(request)
     if not is_valid:
-        return jsonify({"status": "error", "message": error_msg}), 401 if "Unauthorized" in error_msg else 403
+        return jsonify({"status": "error", "message": error_msg}), 403
 
     logger.info(f"Connection test successful for: {email}")
     return jsonify({
