@@ -8,6 +8,5 @@ scipy
 pandas
 scikit-optimize
 
-# Google Sheets API integration
-google-api-python-client
-google-auth
+# JWT token validation
+PyJWT[crypto]
