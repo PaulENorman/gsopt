@@ -1,11 +1,10 @@
-#this file is used to test server funcitonality by sentding post requests to 8080
-
+#this file is used to test gsopt.py by sending optimization requests with known functions
 import requests
 import numpy as np
 import matplotlib.pyplot as plt
 import time
 import os
-from typing import Callable, List, Dict, Tuple
+from typing import Callable, List, Dict, Tuple, Optional
 
 # --- Configuration ---
 BASE_URL = 'http://localhost:8080'
@@ -14,17 +13,8 @@ BATCH_SIZE = 5
 NUM_INIT_POINTS = 10
 NOISE_LEVEL = 0.01
 
-dimensions = {'x1': (-5, 5), 'x2': (-5, 5)}
-batch_size = 5
-acq_func = 'EI'
-base_estimator = 'GP'
-
-json = {
-    'dimensions': dimensions,
-    'base_estimator': base_estimator,
-    'acq_func': acq_func,
-    'batch_size': batch_size
-}
+# List of optimizers to test
+OPTIMIZERS = ['NEVERGRAD-OnePlusOne', 'SKOPT-GP']
 
 # --- Benchmark Functions ---
 
@@ -76,10 +66,11 @@ def run_test(
     name: str,
     dims: int,
     bounds: Tuple[float, float],
-    true_minimum: float
-):
+    true_minimum: float,
+    optimizer_type: str = 'GP'
+) -> Tuple[List[int], List[float]]:
     """
-    Runs a full optimization test for a given function.
+    Runs a full optimization test for a given function with a specific optimizer.
 
     Args:
         func: The objective function to test.
@@ -87,13 +78,17 @@ def run_test(
         dims: The number of dimensions for the function.
         bounds: A tuple (min, max) for all dimensions.
         true_minimum: The known true minimum of the function.
+        optimizer_type: The type of optimizer to use ('GP', 'SNOBFIT', etc.)
+        
+    Returns:
+        Tuple of (evaluations_list, best_results_list) for plotting
     """
-    print(f"\n--- Running test for: {name} ---")
+    print(f"\n--- Running test for: {name} with {optimizer_type} ---")
     start_time = time.time()
 
     param_names = [f'x{i+1}' for i in range(dims)]
     settings = {
-        "base_estimator": "GP",
+        "base_estimator": optimizer_type,
         "acquisition_function": "EI",
         "num_params": dims,
         "param_names": param_names,
@@ -114,15 +109,17 @@ def run_test(
         points_to_evaluate = response.json()['data']
     except requests.RequestException as e:
         print(f"Error initializing optimization: {e}")
-        return
+        return [], []
 
     all_evaluated_points = []
     best_results_over_time = []
+    num_evaluations = []
     current_best = float('inf')
+    total_evals = 0
 
     # Main optimization loop
     for i in range(NUM_ITERATIONS):
-        print(f"Iteration {i+1}/{NUM_ITERATIONS}...")
+        print(f"Iteration {i+1}/{NUM_ITERATIONS}... ({len(points_to_evaluate)} points)")
 
         # 2. Evaluate points
         evaluated_this_iteration = []
@@ -131,12 +128,17 @@ def run_test(
             objective_value = func(params)
             point['objective'] = objective_value
             evaluated_this_iteration.append(point)
-
+            
+            total_evals += 1
+            
             if objective_value < current_best:
                 current_best = objective_value
+            
+            # Track best result after each evaluation
+            num_evaluations.append(total_evals)
+            best_results_over_time.append(current_best)
         
         all_evaluated_points.extend(evaluated_this_iteration)
-        best_results_over_time.append(current_best)
 
         # 3. Continue Optimization
         try:
@@ -152,56 +154,71 @@ def run_test(
             break
     
     print(f"Test finished. Best minimum found: {current_best:.4f}")
+    print(f"Total evaluations: {total_evals}")
     print(f"Total time: {time.time() - start_time:.2f}s")
 
-    # 4. Plot results
-    plt.figure(figsize=(10, 6))
-    plt.plot(range(1, NUM_ITERATIONS + 1), best_results_over_time, marker='o', label='Best Minimum Found')
-    plt.axhline(y=true_minimum, color='r', linestyle='--', label=f'True Minimum ({true_minimum})')
-    plt.xlabel('Iteration')
-    plt.ylabel('Objective Value')
-    plt.title(f'Optimization Convergence for {name} Function')
-    plt.legend()
-    plt.grid(True)
+    return num_evaluations, best_results_over_time
+
+def compare_optimizers(
+    func: Callable,
+    name: str,
+    dims: int,
+    bounds: Tuple[float, float],
+    true_minimum: float,
+    optimizers: List[str] = None
+):
+    """
+    Compares multiple optimizers on the same function.
+    
+    Args:
+        func: The objective function to test
+        name: The name of the function for plotting
+        dims: The number of dimensions
+        bounds: A tuple (min, max) for all dimensions
+        true_minimum: The known true minimum of the function
+        optimizers: List of optimizer types to compare
+    """
+    if optimizers is None:
+        optimizers = OPTIMIZERS
+    
+    plt.figure(figsize=(12, 7))
+    
+    for optimizer_type in optimizers:
+        num_evals, best_results = run_test(func, name, dims, bounds, true_minimum, optimizer_type)
+        if num_evals:  # Only plot if we got results
+            plt.plot(num_evals, best_results, marker='o', label=f'{optimizer_type}', alpha=0.7, markersize=3)
+    
+    # plt.axhline(y=true_minimum, color='r', linestyle='--', linewidth=2, label=f'True Minimum ({true_minimum})')
+    plt.xlabel('Number of Objective Function Evaluations', fontsize=12)
+    plt.ylabel('Best Objective Value Found', fontsize=12)
+    plt.title(f'Optimizer Comparison: {name} Function', fontsize=14)
+    plt.legend(fontsize=10)
+    plt.grid(True, alpha=0.3)
+    plt.yscale('log')  # Log scale often helps visualize convergence
     
     output_dir = "test_results"
     os.makedirs(output_dir, exist_ok=True)
-    filename = os.path.join(output_dir, f'{name.lower().replace(" ", "_")}_convergence.png')
-    plt.savefig(filename)
-    print(f"Plot saved to {filename}")
+    filename = os.path.join(output_dir, f'{name.lower().replace(" ", "_")}_comparison.png')
+    plt.savefig(filename, dpi=150, bbox_inches='tight')
+    print(f"\nComparison plot saved to {filename}\n")
     plt.close()
 
 
 if __name__ == "__main__":
     # Define the tests to run
     tests = [
-        {"func": sphere, "name": "Sphere", "dims": 2, "bounds": (-5, 5), "min": 0.0},
-        {"func": rosenbrock, "name": "Rosenbrock", "dims": 2, "bounds": (-2, 2), "min": 0.0},
-        {"func": ackley, "name": "Ackley", "dims": 2, "bounds": (-5, 5), "min": 0.0},
-        {"func": branin, "name": "Branin", "dims": 2, "bounds": ((-5, 10), (0, 15)), "min": 0.397887},
-        {"func": linear_with_noise, "name": "Linear with Noise", "dims": 2, "bounds": (-5, 5), "min": -15.0}, # 1*(-5) + (-2)*5 = -15
-        {"func": parabolic_with_noise, "name": "Parabolic with Noise", "dims": 2, "bounds": (-5, 5), "min": 0.0},
+        {"func": sphere, "name": "Sphere", "dims": 3, "bounds": (-5, 5), "min": 0.0},
+        {"func": rosenbrock, "name": "Rosenbrock", "dims": 3, "bounds": (-2, 2), "min": 0.0},
+        {"func": ackley, "name": "Ackley", "dims": 3, "bounds": (-5, 5), "min": 0.0},
+        {"func": parabolic_with_noise, "name": "Parabolic with Noise", "dims": 3, "bounds": (-5, 5), "min": 0.0},
     ]
 
     for test in tests:
-        # Special handling for Branin bounds
-        if test['name'] == 'Branin':
-            param_names = ['x1', 'x2']
-            settings = {
-                "base_estimator": "GP", "acquisition_function": "EI", "num_params": 2,
-                "param_names": param_names,
-                "param_mins": [test['bounds'][0][0], test['bounds'][1][0]],
-                "param_maxes": [test['bounds'][0][1], test['bounds'][1][1]],
-                "num_init_points": NUM_INIT_POINTS, "batch_size": BATCH_SIZE
-            }
-            # This is a simplified run for Branin due to different bounds per dim
-            # A full implementation would pass these specific bounds to run_test
-            print("\nSkipping Branin in this simplified script due to unique bounds. A full test suite would handle this.")
-        else:
-            run_test(
-                func=test['func'],
-                name=test['name'],
-                dims=test['dims'],
-                bounds=test['bounds'],
-                true_minimum=test['min']
-            )
+        compare_optimizers(
+            func=test['func'],
+            name=test['name'],
+            dims=test['dims'],
+            bounds=test['bounds'],
+            true_minimum=test['min'],
+            optimizers=OPTIMIZERS
+        )

@@ -9,13 +9,13 @@ with existing data points.
 from dataclasses import dataclass
 from typing import Dict, List, Any, Optional, Tuple
 
-import numpy as np
 import jwt
 from flask import Flask, request, jsonify
-from skopt import Optimizer
-from skopt.space import Real
 
 from utils import setup_logging, authenticate_request
+from skopt_bayes import build_optimizer as build_skopt_optimizer
+from opt_snobfit import build_optimizer as build_snobfit_optimizer
+from opt_nevergrad import build_optimizer as build_nevergrad_optimizer
 
 logger = setup_logging(__name__)
 app = Flask(__name__)
@@ -63,88 +63,79 @@ class OptimizerSettings:
         }
 
 
-def parse_training_data(
-    existing_data: List[Dict[str, Any]],
-    param_names: List[str]
-) -> Tuple[List[List[float]], List[float]]:
+def build_optimizer(settings: OptimizerSettings, existing_data: Optional[List[Dict[str, Any]]] = None):
     """
-    Extracts and validates training data from existing data points.
-    
-    Args:
-        existing_data: List of data points with parameter values and objectives
-        param_names: Ordered list of parameter names
-        
-    Returns:
-        Tuple of (X_train, y_train) where X_train is parameter values and 
-        y_train is objective values
-    """
-    x_train = []
-    y_train = []
-    
-    logger.info(f"Processing {len(existing_data)} existing data points")
-    
-    for i, row in enumerate(existing_data):
-        if 'objective' not in row or row['objective'] is None or row['objective'] == '':
-            logger.debug(f"Skipping row {i}: no objective value")
-            continue
-        
-        try:
-            x_point = [float(row.get(name, 0)) for name in param_names]
-            y_value = float(row['objective'])
-            x_train.append(x_point)
-            y_train.append(y_value)
-            logger.debug(f"Added point {i}: params={x_point}, objective={y_value}")
-        except (ValueError, TypeError) as e:
-            logger.warning(f"Skipping invalid data point {i}: {row}, error: {e}")
-            continue
-    
-    if x_train:
-        logger.info(f"Extracted {len(x_train)} valid training points")
-        logger.info(f"Objective range: min={min(y_train):.4f}, max={max(y_train):.4f}, mean={np.mean(y_train):.4f}")
-    else:
-        logger.warning("No valid evaluated points found")
-    
-    return x_train, y_train
-
-
-def build_optimizer(
-    settings: OptimizerSettings,
-    existing_data: Optional[List[Dict[str, Any]]] = None
-) -> Optimizer:
-    """
-    Creates and optionally trains a Bayesian optimizer.
+    Creates and optionally trains an optimizer based on settings.
     
     Args:
         settings: OptimizerSettings containing all configuration
         existing_data: Optional list of evaluated points for training
         
     Returns:
-        Configured and trained Optimizer instance
+        Configured and trained optimizer instance
     """
-    dimensions = settings.get_dimensions()
-    space = [Real(bounds[0], bounds[1], name=name) for name, bounds in dimensions.items()]
+    optimizer_type = settings.base_estimator
     
-    logger.info(f"Created search space with {len(space)} dimensions")
-    logger.info(f"Parameters: {[dim.name for dim in space]}")
-
-    optimizer = Optimizer(
-        space,
-        base_estimator=settings.base_estimator,
-        acq_func=settings.acquisition_function,
-        n_initial_points=5
-    )
+    logger.info(f"Building optimizer: {optimizer_type}")
     
-    logger.info(f"Initialized optimizer: estimator={settings.base_estimator}, acq_func={settings.acquisition_function}")
+    # Parse optimizer type with prefix support (e.g., 'SKOPT-GP', 'NEVERGRAD-OnePlusOne')
+    if '-' in optimizer_type:
+        parts = optimizer_type.split('-', 1)
+        prefix, algo = parts[0].upper(), parts[1]  # algo preserves its original casing
+        
+        if prefix == 'SKOPT':
+            return build_skopt_optimizer(
+                param_names=settings.param_names,
+                param_mins=settings.param_mins,
+                param_maxes=settings.param_maxes,
+                base_estimator=algo.upper(),
+                acquisition_function=settings.acquisition_function,
+                existing_data=existing_data
+            )
+        elif prefix == 'NEVERGRAD':
+            return build_nevergrad_optimizer(
+                param_names=settings.param_names,
+                param_mins=settings.param_mins,
+                param_maxes=settings.param_maxes,
+                optimizer_name=algo,  # Pass the correct algo name, e.g., "OnePlusOne"
+                existing_data=existing_data
+            )
+        elif prefix == 'SNOBFIT':
+            return build_snobfit_optimizer(
+                param_names=settings.param_names,
+                param_mins=settings.param_mins,
+                param_maxes=settings.param_maxes,
+                existing_data=existing_data
+            )
     
-    if existing_data:
-        x_train, y_train = parse_training_data(existing_data, settings.param_names)
-        if x_train:
-            optimizer.tell(x_train, y_train)
-            logger.info("Successfully trained optimizer with existing data")
-    
-    return optimizer
-
-
+    # Fallback for old format or simple names
+    optimizer_name_upper = optimizer_type.upper()
+    if optimizer_name_upper == 'SNOBFIT':
+        return build_snobfit_optimizer(
+            param_names=settings.param_names,
+            param_mins=settings.param_mins,
+            param_maxes=settings.param_maxes,
+            existing_data=existing_data
+        )
+    elif optimizer_name_upper in ['GP', 'RF', 'ET', 'GBRT', 'DUMMY']:
+        return build_skopt_optimizer(
+            param_names=settings.param_names,
+            param_mins=settings.param_mins,
+            param_maxes=settings.param_maxes,
+            base_estimator=optimizer_name_upper,
+            acquisition_function=settings.acquisition_function,
+            existing_data=existing_data
+        )
+    else:
+        # Default to Nevergrad for other cases, maintaining backward compatibility
+        # Keep original case for nevergrad optimizer names
+        return build_nevergrad_optimizer(
+            param_names=settings.param_names,
+            param_mins=settings.param_mins,
+            param_maxes=settings.param_maxes,
+            optimizer_name=optimizer_type,
+            existing_data=existing_data
+        )
 def format_points_response(
     points: List[List[float]],
     param_names: List[str]

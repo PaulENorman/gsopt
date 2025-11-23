@@ -7,6 +7,11 @@ numpy
 scipy
 pandas
 scikit-optimize
+SQSnobFit
+nevergrad
 
 # JWT token validation
 PyJWT[crypto]
+
+# Testing and plotting
+matplotlib
