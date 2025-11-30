@@ -30,12 +30,12 @@ np.random.seed(42)
 
 # --- Global Configuration ---
 BASE_URL = 'http://localhost:8080'
-NUM_ITERATIONS = 10       # Number of optimization loops after initial points
-BATCH_SIZE = 10           # Number of points to evaluate in each parallel batch
-NUM_INIT_POINTS = 10     # Number of initial points to sample before optimizing
+NUM_ITERATIONS = 20       # Number of optimization loops after initial points
 NOISE_LEVEL = 0.01       # Standard deviation of Gaussian noise to add to the objective
 N_DIMS = 5               # Number of dimensions for the benchmark functions
 NUM_RUNS = 5             # Number of times to run each optimizer to average results
+NUM_INIT_POINTS = N_DIMS*4
+BATCH_SIZE = N_DIMS
 
 # List of optimizer identifiers to be tested
 OPTIMIZERS: List[str] = ['SKOPT-RF', 'SKOPT-ET', 'SKOPT-GBRT', 'RANDOM', 'SKOPT-GP']
@@ -509,7 +509,7 @@ if __name__ == "__main__":
     tests: List[Dict[str, Any]] = [
        {"func": sphere, "name": "Sphere", "dims": N_DIMS, "bounds": (-5, 5), "min": 0.0},
        {"func": rosenbrock, "name": "Rosenbrock", "dims": N_DIMS, "bounds": (-10, 10), "min": 0.0},
-       {"func": ackley, "name": "Ackley", "dims": N_DIMS, "bounds": (-5, 5), "min": 0.0},
+       {"func": ackley, "name": "Ackley", "dims": N_DIMS, "bounds": (-2, 2), "min": 0.0},
        {"func": linear, "name": "Linear", "dims": N_DIMS, "bounds": (-5, 5), "min": -20.0}, # Min depends on dims and bounds
        {"func": rastrigin, "name": "Rastrigin", "dims": N_DIMS, "bounds": (-5.12, 5.12), "min": 0.0},
        {"func": griewank, "name": "Griewank", "dims": N_DIMS, "bounds": (-30, 30), "min": 0.0},
