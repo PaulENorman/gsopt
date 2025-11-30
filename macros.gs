@@ -9,9 +9,15 @@
 const CLOUD_RUN_URL = 'https://gsopt-449559265504.europe-west1.run.app';
 const DATA_SHEET_NAME = 'Data';
 const SETTINGS_SHEET_NAME = 'Optimizer Settings';
+const ANALYSIS_SHEET_NAME = 'Analysis';
 const DATA_START_ROW = 4;
-const PARAM_CONFIG_START_ROW = 9;
+const PARAM_CONFIG_START_ROW = 13; // Changed from 9
 const MAX_PARAM_ROWS = 500;
+
+// New constants for settings cells
+const NUM_PARAMS_CELL = 'B11';
+const OBJECTIVE_NAME_CELL = 'B8';
+const OPTIMIZATION_MODE_CELL = 'B9';
 
 
 function onOpen() {
@@ -20,9 +26,10 @@ function onOpen() {
    */
   SpreadsheetApp.getUi()
       .createMenu('Optimizer')
-      .addItem('1. Initialize Optimization', 'initOptimization')
-      .addItem('2. Continue Optimization', 'continueOptimization')
+      .addItem('1. Initialize Points', 'ask_for_init_points')
+      .addItem('2. Continue Optimization', 'tell_ask')
       .addSeparator()
+      .addItem('Delete Analysis Plots', 'deleteAnalysisPlots')
       .addItem('Test Connection', 'testCloudRunConnection')
       .addToUi();
 }
@@ -37,27 +44,205 @@ function onEdit(e) {
   if (!e || !e.range) return;
   
   const sheet = e.range.getSheet();
-  const editedCell = e.range.getA1Notation();
+  const sheetName = sheet.getName();
+  const editedRow = e.range.getRow();
+  const editedCol = e.range.getColumn();
 
-  if (sheet.getName() === SETTINGS_SHEET_NAME && editedCell === 'B7') {
-    try {
-      generateParameterRanges(sheet);
-    } catch (error) {
-      console.error('Error updating parameter ranges:', error);
+  if (sheetName === SETTINGS_SHEET_NAME) {
+    // Case 1: Number of parameters changed
+    if (e.range.getA1Notation() === NUM_PARAMS_CELL) {
+      try {
+        generateParameterRanges(sheet);
+        updateDataSheetHeaders();
+      } catch (error) {
+        console.error('Error updating parameter ranges/headers:', error);
+      }
+    }
+    // Case 2: A parameter name or objective name was changed
+    else if (
+      (editedCol === 1 && editedRow >= PARAM_CONFIG_START_ROW) ||
+      e.range.getA1Notation() === OBJECTIVE_NAME_CELL
+    ) {
+      try {
+        updateDataSheetHeaders();
+      } catch (error) {
+        console.error('Error updating data sheet headers:', error);
+      }
+    }
+  } else if (sheetName === DATA_SHEET_NAME && editedRow >= DATA_START_ROW) {
+    // More efficient check for objective column edits.
+    // Instead of reading all settings, just read the one cell needed.
+    const settingsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SETTINGS_SHEET_NAME);
+    if (!settingsSheet) return;
+
+    const numParams = parseInt(settingsSheet.getRange(NUM_PARAMS_CELL).getValue()) || 0;
+    // Column structure: Iteration (1) | Params (numParams) | Objective (1)
+    const objectiveCol = numParams + 2;
+
+    // Check if the edit happened within the objective column
+    if (editedCol === objectiveCol) {
+      try {
+        // Use a lock to prevent multiple simultaneous executions from rapid edits
+        const lock = LockService.getScriptLock();
+        if (lock.tryLock(1000)) { // Wait 1 second for lock
+          updateAnalysisPlots();
+          lock.releaseLock();
+        } else {
+          console.log('Could not acquire lock to update plots. Another process may be running.');
+        }
+      } catch (error) {
+        console.error('Error updating analysis plots:', error);
+      }
     }
   }
 }
 
 
+function updateAnalysisPlots() {
+  /**
+   * Clears and redraws all charts on the Analysis sheet based on the current
+   * data in the Data sheet.
+   */
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const analysisSheet = ss.getSheetByName(ANALYSIS_SHEET_NAME);
+  const dataSheet = ss.getSheetByName(DATA_SHEET_NAME);
+
+  if (!analysisSheet || !dataSheet) {
+    console.error('Could not find required sheets (Analysis or Data)');
+    return;
+  }
+
+  // Clear existing charts
+  const charts = analysisSheet.getCharts();
+  for (let i = 0; i < charts.length; i++) {
+    analysisSheet.removeChart(charts[i]);
+  }
+
+  const settings = readOptimizerSettings();
+  const lastRow = dataSheet.getLastRow();
+  if (lastRow < DATA_START_ROW) return; // No data to plot
+
+  // Calculate data dimensions
+  const numRows = lastRow - DATA_START_ROW + 1;
+  // Column structure: Iteration (1) | Params (numParams) | Objective (1)
+  const objectiveCol = settings.num_params + 2;
+
+  // Define Ranges directly from Data sheet
+  const iterationRange = dataSheet.getRange(DATA_START_ROW, 1, numRows, 1);
+  const objectiveRange = dataSheet.getRange(DATA_START_ROW, objectiveCol, numRows, 1);
+
+  let chartPositionRow = 2; 
+  const chartPositionCol = 2; // Place charts starting at column B
+
+  // 1. Create Objective vs. Iteration plot
+  const progressChartBuilder = analysisSheet.newChart()
+    .asScatterChart()
+    .addRange(iterationRange) // X-axis (from Data sheet)
+    .addRange(objectiveRange) // Y-axis (from Data sheet)
+    .setOption('title', 'Objective vs. Iteration')
+    .setOption('hAxis', { title: 'Iteration' })
+    .setOption('vAxis', { title: 'Objective' })
+    .setOption('pointSize', 5)
+    .setOption('lineWidth', 2) // Connects the points
+    .setOption('width', 600)
+    .setOption('height', 400);
+  
+  const progressChart = progressChartBuilder.setPosition(chartPositionRow, chartPositionCol, 0, 0).build();
+  analysisSheet.insertChart(progressChart);
+  chartPositionRow += 21; // Move down (~400px)
+
+  // 2. Create Parameter vs. Objective plots
+  settings.param_names.forEach((paramName, i) => {
+    // Param column index is i + 2 (Iteration is 1, Params start at 2)
+    const paramRange = dataSheet.getRange(DATA_START_ROW, i + 2, numRows, 1);
+
+    const paramChartBuilder = analysisSheet.newChart()
+      .asScatterChart()
+      .addRange(paramRange)   // X-axis (from Data sheet)
+      .addRange(objectiveRange) // Y-axis (from Data sheet)
+      .setOption('title', `${paramName} vs. Objective`)
+      .setOption('hAxis', { title: paramName })
+      .setOption('vAxis', { title: 'Objective' })
+      .setOption('pointSize', 5)
+      .setOption('width', 600)
+      .setOption('height', 400);
+    
+    const paramChart = paramChartBuilder.setPosition(chartPositionRow, chartPositionCol, 0, 0).build();
+    analysisSheet.insertChart(paramChart);
+    chartPositionRow += 21;
+  });
+
+  console.log('Updated analysis plots.');
+}
+
+
+function deleteAnalysisPlots() {
+  /**
+   * Deletes all charts from the Analysis sheet.
+   */
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const analysisSheet = ss.getSheetByName(ANALYSIS_SHEET_NAME);
+  
+  if (!analysisSheet) {
+    console.error('Could not find Analysis sheet');
+    return;
+  }
+
+  const charts = analysisSheet.getCharts();
+  for (let i = 0; i < charts.length; i++) {
+    analysisSheet.removeChart(charts[i]);
+  }
+  console.log('Deleted all analysis plots.');
+}
+
+
+function updateDataSheetHeaders() {
+  /**
+   * Updates the header row (row 3) of the Data sheet based on the
+   * parameter names and objective name defined in the Optimizer Settings sheet.
+   */
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const settingsSheet = ss.getSheetByName(SETTINGS_SHEET_NAME);
+  const dataSheet = ss.getSheetByName(DATA_SHEET_NAME);
+
+  if (!dataSheet || !settingsSheet) {
+    console.error('Could not find required sheets (Data or Optimizer Settings)');
+    return;
+  }
+
+  const numParams = parseInt(settingsSheet.getRange(NUM_PARAMS_CELL).getValue()) || 0;
+  const objectiveName = settingsSheet.getRange(OBJECTIVE_NAME_CELL).getValue() || 'Objective';
+  const headers = [];
+
+  headers.push('Iteration'); // Column 1
+
+  if (numParams > 0) {
+    const paramNames = settingsSheet.getRange(PARAM_CONFIG_START_ROW, 1, numParams).getValues();
+    paramNames.forEach(nameRow => headers.push(nameRow[0] || `parameter${headers.length}`));
+  }
+  headers.push(objectiveName);
+
+  // Clear the old header row (e.g., up to column Z)
+  const headerRange = dataSheet.getRange(3, 1, 1, dataSheet.getMaxColumns());
+  headerRange.clearContent();
+
+  // Write the new headers
+  if (headers.length > 0) {
+    dataSheet.getRange(3, 1, 1, headers.length).setValues([headers]);
+  }
+  console.log('Updated Data sheet headers:', headers);
+}
+
+
 function generateParameterRanges(sheet) {
   /**
-   * Generates or updates parameter configuration rows based on the number specified in B7.
+   * Generates or updates parameter configuration rows based on the number specified in B11.
    * Creates default parameter names, mins, and maxes while preserving existing values.
    * 
    * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet - The Optimizer Settings sheet
    */
-  const numParams = Math.max(0, Math.min(parseInt(sheet.getRange('B7').getValue()) || 0, MAX_PARAM_ROWS));
-  const sourceColor = sheet.getRange('A8').getBackground();
+  const numParams = Math.max(0, Math.min(parseInt(sheet.getRange(NUM_PARAMS_CELL).getValue()) || 0, MAX_PARAM_ROWS));
+  const sourceColor = sheet.getRange('A12').getBackground(); // Assuming color source is now A12
   const whiteColor = '#ffffff';
   
   const fullRange = sheet.getRange(PARAM_CONFIG_START_ROW, 1, MAX_PARAM_ROWS, 3);
@@ -101,7 +286,7 @@ function readOptimizerSettings() {
     return match ? match[1] : str;
   };
   
-  const numParams = parseInt(sheet.getRange('B7').getValue()) || 0;
+  const numParams = parseInt(sheet.getRange(NUM_PARAMS_CELL).getValue()) || 0;
   const paramNames = [];
   const paramMins = [];
   const paramMaxes = [];
@@ -118,6 +303,7 @@ function readOptimizerSettings() {
     acquisition_function: parseParens(sheet.getRange('B3').getValue()),
     num_init_points: parseInt(sheet.getRange('B4').getValue()) || 10,
     batch_size: parseInt(sheet.getRange('B5').getValue()) || 5,
+    objective_name: sheet.getRange(OBJECTIVE_NAME_CELL).getValue() || 'Objective',
     num_params: numParams,
     param_names: paramNames,
     param_mins: paramMins,
@@ -278,7 +464,13 @@ function ask_for_init_points() {
     return;
   }
   
-  _writePointsToSheet(dataSheet, response.data, settings, DATA_START_ROW);
+  // Clear existing data (below header row 3)
+  const lastRow = dataSheet.getLastRow();
+  if (lastRow >= DATA_START_ROW) {
+    dataSheet.getRange(DATA_START_ROW, 1, lastRow - DATA_START_ROW + 1, dataSheet.getMaxColumns()).clearContent();
+  }
+
+  _writePointsToSheet(dataSheet, response.data, settings, DATA_START_ROW, 1);
   console.log(`Wrote ${response.data.length} initial points to Data sheet`);
 }
 
@@ -325,6 +517,21 @@ function tell_ask() {
     return;
   }
   
+  // Check for maximization and negate objective values if needed
+  const settingsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SETTINGS_SHEET_NAME);
+  const optimizationMode = settingsSheet.getRange(OPTIMIZATION_MODE_CELL).getValue();
+  const isMaximization = optimizationMode === 'Maximize';
+
+  if (isMaximization) {
+    console.log('Maximization mode detected. Negating objective values.');
+    existingData.forEach(point => {
+      if (point.objective !== '' && point.objective !== null) {
+        point.objective = -1 * parseFloat(point.objective);
+      }
+    });
+    console.log(`Negated sample: ${JSON.stringify(existingData.find(p => p.objective !== ''))}`);
+  }
+
   const response = callCloudRunEndpoint(
     '/continue-optimization',
     { settings: settings, existing_data: existingData },
@@ -335,7 +542,13 @@ function tell_ask() {
     return;
   }
   
-  _writePointsToSheet(dataSheet, response.data, settings, lastRow + 1);
+  // Calculate next iteration number
+  // lastRow is the row index. DATA_START_ROW is 4.
+  // If lastRow is 4 (1 point), iteration is 1. Next is 2.
+  // Iteration count = lastRow - DATA_START_ROW + 1
+  const nextIteration = (lastRow - DATA_START_ROW + 1) + 1;
+
+  _writePointsToSheet(dataSheet, response.data, settings, lastRow + 1, nextIteration);
   console.log(`Appended ${response.data.length} new points at row ${lastRow + 1}`);
 }
 
@@ -343,6 +556,7 @@ function tell_ask() {
 function _readDataFromSheet(sheet, settings, startRow, endRow) {
   /**
    * Reads data points from sheet and converts to array of objects.
+   * Skips the first column (Iteration).
    * 
    * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet - Data sheet
    * @param {Object} settings - Optimizer settings
@@ -350,8 +564,11 @@ function _readDataFromSheet(sheet, settings, startRow, endRow) {
    * @param {number} endRow - Last row to read
    * @returns {Array<Object>} Array of data points with parameter and objective values
    */
-  const numCols = settings.num_params + 1;
-  const range = sheet.getRange(startRow, 1, endRow - startRow + 1, numCols);
+  // Column structure: Iteration (1) | Params (numParams) | Objective (1)
+  // We need to read Params and Objective.
+  // Params start at Column 2.
+  const numCols = settings.num_params + 1; // Params + Objective
+  const range = sheet.getRange(startRow, 2, endRow - startRow + 1, numCols);
   const values = range.getValues();
   
   return values.map(row => {
@@ -365,22 +582,25 @@ function _readDataFromSheet(sheet, settings, startRow, endRow) {
 }
 
 
-function _writePointsToSheet(sheet, points, settings, startRow) {
+function _writePointsToSheet(sheet, points, settings, startRow, startIteration) {
   /**
    * Writes points to sheet starting at specified row.
+   * Includes iteration number in the first column.
    * 
    * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet - Data sheet
    * @param {Array<Object>} points - Points to write
    * @param {Object} settings - Optimizer settings
    * @param {number} startRow - Row to start writing
+   * @param {number} startIteration - Starting iteration number
    */
-  const rows = points.map(point => {
-    const row = settings.param_names.map(name => point[name] || 0);
-    row.push('');
+  const rows = points.map((point, index) => {
+    const row = [startIteration + index]; // Iteration
+    settings.param_names.forEach(name => row.push(point[name] || 0)); // Params
+    row.push(''); // Objective
     return row;
   });
   
-  const numCols = settings.num_params + 1;
+  const numCols = settings.num_params + 2; // Iteration + Params + Objective
   const range = sheet.getRange(startRow, 1, rows.length, numCols);
   range.setValues(rows);
 }
