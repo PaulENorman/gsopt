@@ -30,7 +30,7 @@ np.random.seed(42)
 
 # --- Global Configuration ---
 BASE_URL = 'http://localhost:8080'
-NUM_ITERATIONS = 20       # Number of optimization loops after initial points
+NUM_ITERATIONS = 40       # Number of optimization loops after initial points
 NOISE_LEVEL = 0.01       # Standard deviation of Gaussian noise to add to the objective
 N_DIMS = 5               # Number of dimensions for the benchmark functions
 NUM_RUNS = 5             # Number of times to run each optimizer to average results
@@ -38,7 +38,7 @@ NUM_INIT_POINTS = N_DIMS*4
 BATCH_SIZE = N_DIMS
 
 # List of optimizer identifiers to be tested
-OPTIMIZERS: List[str] = ['SKOPT-RF', 'SKOPT-ET', 'SKOPT-GBRT', 'RANDOM', 'SKOPT-GP']
+OPTIMIZERS: List[str] = ['SKOPT-GP', 'SKOPT-RF', 'SKOPT-ET', 'SKOPT-GBRT', 'RANDOM']
 
 
 # --- Benchmark Functions ---
@@ -337,7 +337,7 @@ def compare_optimizers(
     Compares multiple optimizer types on the same function and plots the results.
 
     This function runs each optimizer for a specified number of runs (`NUM_RUNS`)
-    and averages their performance to produce a convergence plot. The 'EI'
+    and averages their performance to produce a convergence plot. The 'gp_hedge'
     acquisition function is used by default for all model-based optimizers.
     """
     if optimizers is None:
@@ -349,9 +349,9 @@ def compare_optimizers(
     plot_min_val = float('inf')
     plot_max_val = float('-inf')
 
-    # Standard settings for regressor comparison: use Expected Improvement (EI).
+    # Standard settings for regressor comparison: use gp_hedge.
     regressor_settings: Dict[str, Any] = {
-        "acquisition_function": "EI",
+        "acquisition_function": "gp_hedge",
         "acq_optimizer": "auto",
         "acq_func_kwargs": {}
     }
@@ -363,7 +363,7 @@ def compare_optimizers(
         print(f"\nRunning {optimizer_type} for {NUM_RUNS} runs...")
         for i in range(NUM_RUNS):
             print(f"  Run {i+1}/{NUM_RUNS}")
-            # Enforce 'EI' acquisition function via override settings.
+            # Enforce 'gp_hedge' acquisition function via override settings.
             num_evals, best_results = run_test(
                 func, name, dims, bounds, true_minimum, 
                 optimizer_type,
@@ -394,7 +394,7 @@ def compare_optimizers(
 
     plt.xlabel('Number of Objective Function Evaluations', fontsize=12)
     plt.ylabel('Average Best Objective Value Found', fontsize=12)
-    plt.title(f'Regressor Comparison (EI): {name} Function (Avg. over {NUM_RUNS} runs)', fontsize=14)
+    plt.title(f'Regressor Comparison (gp_hedge): {name} Function (Avg. over {NUM_RUNS} runs)', fontsize=14)
     plt.legend(fontsize=10)
     plt.grid(True, alpha=0.3)
     
@@ -433,6 +433,8 @@ def compare_acquisition_functions(
     acq_configs: Dict[str, Dict[str, Any]] = {
         "EI (sampling)": {"acquisition_function": "EI", "acq_optimizer": "sampling", "acq_func_kwargs": {}},
         "EI (lbfgs)": {"acquisition_function": "EI", "acq_optimizer": "lbfgs", "acq_func_kwargs": {}},
+        "PI (sampling)": {"acquisition_function": "PI", "acq_optimizer": "sampling", "acq_func_kwargs": {}},
+        "PI (lbfgs)": {"acquisition_function": "PI", "acq_optimizer": "lbfgs", "acq_func_kwargs": {}},
         "LCB (k=0.5)": {"acquisition_function": "LCB", "acq_optimizer": "lbfgs", "acq_func_kwargs": {"kappa": 0.5}},
         "LCB (k=4.0)": {"acquisition_function": "LCB", "acq_optimizer": "lbfgs", "acq_func_kwargs": {"kappa": 1.0}},
         "LCB (k=1.96)": {"acquisition_function": "LCB", "acq_optimizer": "lbfgs", "acq_func_kwargs": {"kappa": 1.96}},
@@ -508,7 +510,7 @@ if __name__ == "__main__":
     # Define the suite of benchmark tests to be executed.
     tests: List[Dict[str, Any]] = [
        {"func": sphere, "name": "Sphere", "dims": N_DIMS, "bounds": (-5, 5), "min": 0.0},
-       {"func": rosenbrock, "name": "Rosenbrock", "dims": N_DIMS, "bounds": (-10, 10), "min": 0.0},
+       {"func": rosenbrock, "name": "Rosenbrock", "dims": N_DIMS, "bounds": (-3, 3), "min": 0.0},
        {"func": ackley, "name": "Ackley", "dims": N_DIMS, "bounds": (-2, 2), "min": 0.0},
        {"func": linear, "name": "Linear", "dims": N_DIMS, "bounds": (-5, 5), "min": -20.0}, # Min depends on dims and bounds
        {"func": rastrigin, "name": "Rastrigin", "dims": N_DIMS, "bounds": (-5.12, 5.12), "min": 0.0},
