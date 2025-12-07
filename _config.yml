@@ -1,0 +1,21 @@
+# This file MUST be in the root of your repository.
+
+# Use the just-the-docs theme as a remote theme
+remote_theme: just-the-docs/just-the-docs
+
+# Site settings
+title: gs-opt
+description: Human-in-the-loop batched optimization with Google Sheets.
+
+# Set the base URL for your project repository.
+# This is crucial for images and links to work correctly on GitHub Pages.
+# It should be the name of your repo, preceded by a slash.
+# e.g., for https://github.com/PaulENorman/gsopt, this should be "/gsopt".
+baseurl: "/gsopt"
+
+# Tell Jekyll to include the test_results directory in the site build.
+include:
+  - "test_results"
+
+# Enable search
+search_enabled: true
