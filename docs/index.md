@@ -6,6 +6,17 @@ nav_order: 1
 
 # gs-opt: Human-in-the-loop Batched Optimization
 
+**Contents**
+1. [Overview](#overview)
+2. [Google Sheet Usage](#google-sheet-usage)
+3. [Backend Architecture](#backend-architecture)
+4. [The Optimizer](#the-optimizer)
+5. [Pros and Cons](#pros-and-cons)
+6. [Recommendations and Examples](#recommendations-and-examples)
+7. [Benchmark Test Results](#benchmark-test-results)
+
+---
+
 ## Overview
 
 Optimizing real-world engineering problems is often challenging. When the function you want to optimize is expensive, noisy, and lacks a simple mathematical form (aka "black box", with no information on the derivatives of the function), many traditional methods fall short. `gs-opt` is designed for this type of probem by implementing a **human-in-the-loop** batched submission optimization workflow for noisy black box problems. The optimization process is orchestrated through a Google Spread Sheet, so it easy to use for engineers.
@@ -20,6 +31,15 @@ The Google Sheet acts as the central hub, storing all experimental data, providi
 ## Google Sheet Usage
 
 *(This section will be populated with screenshots demonstrating the usage of the Google Sheet.)*
+
+## Backend Architecture
+
+The `gs-opt` backend is a lightweight Python web service built with [Flask](https://flask.palletsprojects.com/). It's designed to be stateless, which makes it robust and easy to deploy on serverless platforms like Google Cloud Run. For each API call, the optimizer is rebuilt from the settings and data provided in the request.
+
+The key components are:
+*   **`gsopt.py`**: The main Flask application that exposes the API endpoints (`/init-optimization`, `/continue-optimization`). It handles incoming requests, authenticates the user, and orchestrates the optimization process.
+*   **`skopt_bayes.py`**: A wrapper around the `scikit-optimize` library that provides a simple "ask" and "tell" interface. The `ask` method requests new points, and the `tell` method updates the optimizer with new results.
+*   **`utils.py`**: Contains helper functions for logging and request authentication.
 
 ## The Optimizer
 
@@ -43,7 +63,7 @@ In `gs-opt`, you can configure the `scikit-optimize` backend by choosing the sur
     *   `EI` (Expected Improvement): A classic choice that focuses on the expected amount of improvement over the current best-found value.
     *   `PI` (Probability of Improvement): Similar to EI, but focuses only on the probability of improving over the current best, rather than the magnitude.
 
-### Pros and Cons
+## Pros and Cons
 
 **Pros:**
 *   **Sample Efficiency:** Bayesian optimization is designed to find good solutions in a minimal number of function evaluations, making it ideal for expensive problems.
@@ -54,7 +74,7 @@ In `gs-opt`, you can configure the `scikit-optimize` backend by choosing the sur
 *   **"Curse of Dimensionality":** Performance can degrade as the number of parameters in the search space increases. Always try to minimize the number of dimensions in your optimization.
 *   **Computational Cost:** The cost of fitting the surrogate model grows with the number of observations. For this project, this cost is generally negligible compared to the cost of evaluating the objective function itself.
 
-### Recommendations and Examples
+## Recommendations and Examples
 
 Based on our testing, we have the following recommendations for starting your optimization:
 
@@ -64,11 +84,11 @@ Based on our testing, we have the following recommendations for starting your op
 
 *   **More Explorative:** If the optimizer seems stuck in a local minimum, or you want to search the parameter space more broadly, we recommend using **`LCB`** with a large **`kappa` (e.g., 4.0 or higher)**. This pushes the optimizer to explore uncertain regions.
 
-#### Benchmark Test Results
+## Benchmark Test Results
 
 The plots below show the performance of different optimizer configurations on standard benchmark functions. These tests were run using the `evaluate.py` script in the repository.
 
-##### Test Configuration
+#### Test Configuration
 
 The results were generated with the following settings to simulate a realistic use case:
 *   **Dimensions:** 5 (`N_DIMS = 5`)
@@ -77,13 +97,13 @@ The results were generated with the following settings to simulate a realistic u
 *   **Batch Size:** 5 new points were requested from the optimizer at each iteration (`BATCH_SIZE = N_DIMS`).
 *   **Averaging:** Each test was run 5 times (`NUM_RUNS = 5`), and the results were averaged to ensure the conclusions are robust.
 
-##### Regressor Performance
+#### Regressor Performance
 
 The following plot compares the performance of different surrogate models (regressors) on the Rosenbrock function, a classic difficult non-convex problem. All optimizers used the `gp_hedge` acquisition function. The `SKOPT-GP` (Gaussian Process) model consistently finds a better solution faster than the tree-based methods.
 
 ![Rosenbrock Regressor Comparison]({{ '/test_results/rosenbrock_regressor_comparison.png' | relative_url }})
 
-##### Acquisition Function Performance
+#### Acquisition Function Performance
 
 This plot compares different acquisition functions for the `SKOPT-GP` optimizer on the Ackley function, which has many local minima. The `gp_hedge` strategy shows strong, consistent performance. `LCB` with a high kappa (`k=4.0`) is also effective at exploring, while `LCB` with a low kappa (`k=0.5`) exploits more and converges slower on this particular problem.
 

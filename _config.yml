@@ -10,12 +10,13 @@ description: Human-in-the-loop batched optimization with Google Sheets.
 # Set the base URL for your project repository.
 # This is crucial for images and links to work correctly on GitHub Pages.
 # It should be the name of your repo, preceded by a slash.
-# e.g., for https://github.com/PaulENorman/gsopt, this should be "/gsopt".
+# e.g., for https://paulnorman.cc/gsopt/, this should be "/gsopt".
 baseurl: "/gsopt"
 
+# This is no longer needed since test_results will be inside the /docs source folder.
 # Tell Jekyll to include the test_results directory in the site build.
-include:
-  - "test_results"
+# include:
+#   - "test_results"
 
 # Enable search
 search_enabled: true
