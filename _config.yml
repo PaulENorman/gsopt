@@ -1,11 +1,14 @@
-theme: jekyll-theme-minimal
+# Use the just-the-docs theme
+remote_theme: just-the-docs/just-the-docs
+
 title: gs-opt
 description: Human-in-the-loop batched optimization with Google Sheets.
 
-# Tell Jekyll to include the test_results directory in the site build
+# Set the base URL for your project repository.
+# This should be the name of your repo, preceded by a slash.
+# For example, if your repo is https://github.com/PaulENorman/gsopt, this should be "/gsopt".
+baseurl: "/gsopt"
+
+# Tell Jekyll to include non-standard directories in the site build.
 include:
   - "test_results"
-
-# Tell Jekyll to process our custom stylesheet
-sass:
-  sass_dir: assets/css
