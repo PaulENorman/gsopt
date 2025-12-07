@@ -1,5 +1,13 @@
 # gs-opt: Human-in-the-loop Batched Optimization
 
+## Contents
+* [Overview](#overview)
+* [Google Sheet Usage](#google-sheet-usage)
+* [The Optimizer](#the-optimizer)
+* [Pros and Cons](#pros-and-cons)
+* [Recommendations and Examples](#recommendations-and-examples)
+* [Benchmark Test Results](#benchmark-test-results)
+
 ## Overview
 
 Optimizing real-world engineering problems is often challenging. When the function you want to optimize is expensive, noisy, and lacks a simple mathematical form (aka "black box", with no information on the derivatives of the function), many traditional methods fall short. `gs-opt` is designed for this type of probem by implementing a **human-in-the-loop** batched submission optimization workflow for noisy black box problems. The optimization process is orchestrated through a Google Spread Sheet, so it easy to use for engineers.
@@ -75,10 +83,10 @@ The results were generated with the following settings to simulate a realistic u
 
 The following plot compares the performance of different surrogate models (regressors) on the Rosenbrock function, a classic difficult non-convex problem. All optimizers used the `gp_hedge` acquisition function. The `SKOPT-GP` (Gaussian Process) model consistently finds a better solution faster than the tree-based methods.
 
-![Rosenbrock Regressor Comparison](../test_results/rosenbrock_regressor_comparison.png)
+![Rosenbrock Regressor Comparison](/test_results/rosenbrock_regressor_comparison.png)
 
 ##### Acquisition Function Performance
 
 This plot compares different acquisition functions for the `SKOPT-GP` optimizer on the Ackley function, which has many local minima. The `gp_hedge` strategy shows strong, consistent performance. `LCB` with a high kappa (`k=4.0`) is also effective at exploring, while `LCB` with a low kappa (`k=0.5`) exploits more and converges slower on this particular problem.
 
-![Ackley Acquisition Function Comparison](../test_results/ackley_acq_func_comparison.png)
+![Ackley Acquisition Function Comparison](/test_results/ackley_acq_func_comparison.png)
