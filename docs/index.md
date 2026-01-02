@@ -108,3 +108,10 @@ The following plot compares the performance of different surrogate models (regre
 This plot compares different acquisition functions for the `SKOPT-GP` optimizer on the Ackley function, which has many local minima. The `gp_hedge` strategy shows strong, consistent performance. `LCB` with a high kappa (`k=4.0`) is also effective at exploring, while `LCB` with a low kappa (`k=0.5`) exploits more and converges slower on this particular problem.
 
 ![Ackley Acquisition Function Comparison]({{ '/test_results/ackley_acq_func_comparison.png' | relative_url }})
+
+---
+
+## Legal
+
+*   [Privacy Policy]({{ '/docs/privacy_policy.md' | relative_url }})
+*   [Terms of Service]({{ '/docs/terms_of_service.md' | relative_url }})
