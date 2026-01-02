@@ -113,5 +113,5 @@ This plot compares different acquisition functions for the `SKOPT-GP` optimizer 
 
 ## Legal
 
-*   [Privacy Policy]({{ '/docs/privacy_policy.md' | relative_url }})
-*   [Terms of Service]({{ '/docs/terms_of_service.md' | relative_url }})
+*   [Privacy Policy]({{ 'privacy_policy.md' | relative_url }})
+*   [Terms of Service]({{ 'terms_of_service.md' | relative_url }})
