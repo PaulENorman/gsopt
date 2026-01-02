@@ -1,3 +1,9 @@
+---
+layout: default
+title: Terms of Service
+nav_order: 11
+---
+
 # Terms of Service
 
 By using the Google Sheets Bayesian Optimization Integration ("the Service"), you agree to the following terms:

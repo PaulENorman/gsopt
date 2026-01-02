@@ -1,3 +1,9 @@
+---
+layout: default
+title: Privacy Policy
+nav_order: 10
+---
+
 # Privacy Policy
 
 This Privacy Policy describes how your information is handled when you use the Google Sheets Bayesian Optimization Integration ("the Service").
