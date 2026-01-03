@@ -1,3 +1,4 @@
+/** @OnlyCurrentDoc */
 /**
  * Google Sheets Bayesian Optimization Integration
  * 
