@@ -23,6 +23,13 @@ import os
 import jwt
 import numpy as np
 from flask import Flask, request, jsonify
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from skopt.plots import plot_convergence, plot_evaluations, plot_objective
+from scipy.optimize import OptimizeResult
+import io
+import base64
 
 from utils import setup_logging, authenticate_request
 from skopt_bayes import build_optimizer as build_skopt_optimizer
@@ -250,6 +257,56 @@ def test_connection() -> Tuple[Any, int]:
         "authenticated_user": email,
         "commit_sha": commit_sha
     }), 200
+
+
+@app.route('/plot', methods=['POST'])
+def generate_plot() -> Tuple[Any, int]:
+    """Generates skopt plots and returns base64 image data."""
+    is_valid, email, error_msg = authenticate_request(request)
+    if not is_valid:
+        return jsonify({"status": "error", "message": error_msg}), 403
+
+    try:
+        data = request.get_json()
+        plot_type = data.get('plot_type', 'convergence')
+        settings = OptimizerSettings.from_dict(data.get('settings', {}))
+        existing_data = data.get('existing_data', [])
+
+        optimizer = build_optimizer(settings, existing_data)
+        
+        # Create skopt result object needed for plotting
+        res = OptimizeResult()
+        res.x_iters = optimizer.Xi
+        res.func_vals = optimizer.yi
+        res.space = optimizer.space
+        if len(res.func_vals) > 0:
+            res.x = res.x_iters[np.argmin(res.func_vals)]
+            res.fun = np.min(res.func_vals)
+        else:
+            return jsonify({"status": "error", "message": "No data available to plot"}), 400
+
+        plt.figure(figsize=(10, 8))
+        if plot_type == 'convergence':
+            plot_convergence(res)
+        elif plot_type == 'evaluations':
+            plot_evaluations(res)
+        elif plot_type == 'objective':
+            plot_objective(res)
+        
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', bbox_inches='tight')
+        buf.seek(0)
+        img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+        plt.close('all')
+
+        return jsonify({
+            "status": "success",
+            "plot_data": img_base64
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Plot generation failed: {str(e)}", exc_info=True)
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 if __name__ == '__main__':

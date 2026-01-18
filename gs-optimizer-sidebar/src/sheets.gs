@@ -3,11 +3,20 @@ const DATA_SHEET_NAME = 'Data';
 const SETTINGS_SHEET_NAME = 'Parameter Settings';
 const ANALYSIS_SHEET_NAME = 'Main Effect Plots';
 const DATA_START_ROW = 2; // Writing to headers on Row 1, data starts Row 2
-const PARAM_CONFIG_START_ROW = 6; // Parameters start on Row 6
+const PARAM_CONFIG_START_ROW = 7; // Parameters start on Row 7
 const MAX_PARAM_ROWS = 500;
 
 const OBJECTIVE_NAME_CELL = 'B2';
-const NUM_PARAMS_CELL = 'B4';
+const NUM_PARAMS_CELL = 'B5';
+
+const COLORS = {
+  ITER_HEADER: '#cccccc', // Grey
+  ITER_DATA: '#f3f3f3',   // Light Grey
+  PARAM_HEADER: '#a4c2f4', // Medium Blue
+  PARAM_DATA: '#cfe2f3',   // Light Blue
+  OBJ_HEADER: '#b6d7a8',   // Medium Green
+  OBJ_DATA: '#d9ead3'      // Light Green
+};
 
 /**
  * Extracts content within parentheses, e.g., "Gaussian Process (GP)" -> "GP".
@@ -20,7 +29,7 @@ function parseParens(str) {
 
 function onOpen() {
   SpreadsheetApp.getUi()
-      .createMenu('Optimizer')
+      .createMenu('GSOpt')
       .addItem('Open Sidebar', 'openSidebar')
       .addToUi();
 }
@@ -72,6 +81,73 @@ function openParallelCoordinates() {
       .setHeight(700);
   SpreadsheetApp.getUi().showModelessDialog(html, 'Parallel Coordinates Analysis');
 }
+
+/**
+ * Requests a specific skopt plot from the backend and shows it in a dialog.
+ */
+function showSkoptPlot(plotType, title) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheetInfo = readOptimizerSettings();
+  const userEmail = Session.getActiveUser().getEmail();
+  const dataSheet = ss.getSheetByName(DATA_SHEET_NAME);
+  
+  if (!dataSheet) throw new Error("Data sheet not found");
+
+  const lastRow = dataSheet.getLastRow();
+  const settings = {
+    ...sheetInfo,
+    base_estimator: 'SKOPT-GP', // Defaulting for visual context
+    acquisition_function: 'EI'
+  };
+
+  let existingData = [];
+  if (lastRow >= DATA_START_ROW) {
+    existingData = readDataFromSheet(dataSheet, settings, DATA_START_ROW, lastRow)
+      .filter(d => d.objective !== '' && d.objective !== null);
+  }
+
+  if (existingData.length === 0) {
+    SpreadsheetApp.getUi().alert("No evaluated data available to plot.");
+    return;
+  }
+
+  const payload = {
+    plot_type: plotType,
+    settings: settings,
+    existing_data: existingData
+  };
+
+  const options = {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload),
+    headers: {
+      'X-User-Email': userEmail,
+      'Authorization': 'Bearer ' + ScriptApp.getIdentityToken()
+    }
+  };
+
+  const response = UrlFetchApp.fetch(`${CLOUD_RUN_URL}/plot`, options);
+  const result = JSON.parse(response.getContentText());
+
+  if (result.status === 'success') {
+    const html = `
+      <html>
+        <body style="margin:0; display:flex; justify-content:center; align-items:center; background:#f5f5f5;">
+          <img src="data:image/png;base64,${result.plot_data}" style="max-width:100%; max-height:100%; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.15);">
+        </body>
+      </html>
+    `;
+    const dialog = HtmlService.createHtmlOutput(html).setWidth(850).setHeight(650);
+    SpreadsheetApp.getUi().showModelessDialog(dialog, title);
+  } else {
+    throw new Error(result.message);
+  }
+}
+
+function openConvergencePlot() { showSkoptPlot('convergence', 'Convergence Plot'); }
+function openEvaluationsPlot() { showSkoptPlot('evaluations', 'Evaluations Plot'); }
+function openObjectivePlot() { showSkoptPlot('objective', 'Objective Plot'); }
 
 /**
  * Fetches data for the PCP visualization.
@@ -223,6 +299,24 @@ function readOptimizerSettings() {
   };
 }
 
+function writePointsToSheet(sheet, points, settings, startRow, startIteration) {
+  const rows = points.map((point, index) => {
+    const row = [startIteration + index]; // Iteration
+    settings.param_names.forEach(name => row.push(point[name] || 0)); // Params
+    row.push(''); // Objective
+    return row;
+  });
+  
+  const numCols = settings.num_params + 2; // Iteration + Params + Objective
+  const range = sheet.getRange(startRow, 1, rows.length, numCols);
+  range.setValues(rows);
+  
+  // Apply data formatting to new rows
+  sheet.getRange(startRow, 1, rows.length, 1).setBackground(COLORS.ITER_DATA);
+  sheet.getRange(startRow, 2, rows.length, settings.num_params).setBackground(COLORS.PARAM_DATA);
+  sheet.getRange(startRow, numCols, rows.length, 1).setBackground(COLORS.OBJ_DATA);
+}
+
 function updateDataSheetHeaders() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const settingsSheet = ss.getSheetByName(SETTINGS_SHEET_NAME);
@@ -240,13 +334,26 @@ function updateDataSheetHeaders() {
   }
   headers.push(objectiveName);
 
-  dataSheet.getRange(1, 1, 1, dataSheet.getMaxColumns()).clearContent();
+  const maxCols = dataSheet.getMaxColumns();
+  dataSheet.getRange(1, 1, 1, maxCols).clearContent().setBackground(null);
+  
+  // Write and style headers
   dataSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  dataSheet.getRange(1, 1).setBackground(COLORS.ITER_HEADER);
+  if (numParams > 0) dataSheet.getRange(1, 2, 1, numParams).setBackground(COLORS.PARAM_HEADER);
+  dataSheet.getRange(1, headers.length).setBackground(COLORS.OBJ_HEADER);
+
+  // Style columns for existing data (Row 2 to Max)
+  const maxRows = dataSheet.getMaxRows();
+  if (maxRows > 1) {
+    dataSheet.getRange(2, 1, maxRows - 1, 1).setBackground(COLORS.ITER_DATA);
+    if (numParams > 0) dataSheet.getRange(2, 2, maxRows - 1, numParams).setBackground(COLORS.PARAM_DATA);
+    dataSheet.getRange(2, headers.length, maxRows - 1, 1).setBackground(COLORS.OBJ_DATA);
+  }
 }
 
 function generateParameterRanges(sheet) {
   const numParams = Math.max(0, Math.min(parseInt(sheet.getRange(NUM_PARAMS_CELL).getValue()) || 0, MAX_PARAM_ROWS));
-  const sourceColor = sheet.getRange('A5').getBackground(); // Style reference
   
   const fullRange = sheet.getRange(PARAM_CONFIG_START_ROW, 1, MAX_PARAM_ROWS, 3);
   const currentValues = fullRange.getValues();
@@ -260,7 +367,7 @@ function generateParameterRanges(sheet) {
         (currentValues[i][1] === '' || currentValues[i][1] === null) ? -10 : currentValues[i][1],
         (currentValues[i][2] === '' || currentValues[i][2] === null) ? 10 : currentValues[i][2]
       ]);
-      newBackgrounds.push([sourceColor, sourceColor, sourceColor]);
+      newBackgrounds.push([COLORS.PARAM_DATA, COLORS.PARAM_DATA, COLORS.PARAM_DATA]);
     } else {
       newValues.push(['', '', '']);
       newBackgrounds.push(['#ffffff', '#ffffff', '#ffffff']);
@@ -282,19 +389,6 @@ function readDataFromSheet(sheet, settings, startRow, endRow) {
     point.objective = row[settings.num_params];
     return point;
   });
-}
-
-function writePointsToSheet(sheet, points, settings, startRow, startIteration) {
-  const rows = points.map((point, index) => {
-    const row = [startIteration + index]; // Iteration
-    settings.param_names.forEach(name => row.push(point[name] || 0)); // Params
-    row.push(''); // Objective
-    return row;
-  });
-  
-  const numCols = settings.num_params + 2; // Iteration + Params + Objective
-  const range = sheet.getRange(startRow, 1, rows.length, numCols);
-  range.setValues(rows);
 }
 
 function updateAnalysisPlots() {

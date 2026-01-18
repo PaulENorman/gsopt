@@ -2,32 +2,50 @@
 <html>
 <head>
     <base target="_top">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 15px; color: #333; }
-        h2 { font-size: 1.2em; border-bottom: 2px solid #4285F4; padding-bottom: 5px; margin-top: 20px; cursor: pointer; display: flex; align-items: center; }
-        .triangle { display: inline-block; width: 0; height: 0; margin-right: 10px; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid #4285F4; transition: transform 0.2s; }
+        body { font-family: 'Roboto', sans-serif; padding: 16px; color: #202124; background-color: #ffffff; line-height: 1.5; }
+        .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+        .logo-text { font-size: 1.5em; font-weight: 500; color: #1a73e8; margin: 0; }
+        .doc-link { font-size: 0.8em; color: #5f6368; text-decoration: none; border: 1px solid #dadce0; padding: 4px 8px; border-radius: 4px; }
+        .doc-link:hover { background-color: #f8f9fa; }
+        
+        h2 { font-size: 0.9em; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; color: #5f6368; margin-top: 24px; padding-bottom: 8px; border-bottom: 1px solid #e8eaed; cursor: pointer; display: flex; align-items: center; }
+        .triangle { display: inline-block; width: 0; height: 0; margin-right: 8px; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid #5f6368; transition: transform 0.2s; }
         .collapsed .triangle { transform: rotate(-90deg); }
-        .section-content { overflow: hidden; }
+        .section-content { padding-top: 12px; }
         .collapsed .section-content { display: none; }
-        .section { margin-bottom: 20px; }
-        .form-group { margin-bottom: 12px; }
-        label { display: block; font-weight: bold; margin-bottom: 4px; font-size: 0.9em; }
-        select, input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button { background: #4285F4; color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold; margin-bottom: 10px; }
-        button:hover { background: #357ae8; }
-        button:disabled { background: #ccc; cursor: not-allowed; }
-        button.secondary { background: #34a853; }
-        button.secondary:hover { background: #2d9249; }
-        #message { margin-top: 15px; padding: 10px; border-radius: 4px; font-size: 0.9em; display: none; }
-        .footer { margin-top: 30px; text-align: center; font-size: 0.7em; color: #777; border-top: 1px solid #eee; padding-top: 10px; }
-        .footer a { color: #4285F4; text-decoration: none; }
+        
+        .form-group { margin-bottom: 16px; }
+        label { display: block; font-weight: 500; margin-bottom: 6px; font-size: 0.85em; color: #3c4043; }
+        select, input { width: 100%; padding: 10px 12px; border: 1px solid #dadce0; border-radius: 4px; font-size: 0.9em; transition: border-color 0.2s; }
+        select:focus, input:focus { border-color: #1a73e8; outline: none; box-shadow: 0 0 0 2px rgba(26,115,232,0.2); }
+        
+        button { background: #1a73e8; color: #ffffff; border: none; padding: 10px 24px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: 500; font-size: 0.9em; margin-bottom: 12px; transition: background 0.2s, box-shadow 0.2s; box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15); }
+        button:hover { background: #1765cc; box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15); }
+        button:active { background: #1669bb; }
+        button:disabled { background: #e8eaed; color: #9aa0a6; cursor: not-allowed; box-shadow: none; }
+        
+        button.secondary { background: #ffffff; color: #1a73e8; border: 1px solid #dadce0; box-shadow: none; }
+        button.secondary:hover { background: #f8f9fa; border-color: #d2e3fc; }
+        
+        #message { margin-top: 20px; padding: 12px; border-radius: 8px; font-size: 0.85em; display: none; }
+        .footer { margin-top: 32px; text-align: center; font-size: 0.75em; color: #70757a; border-top: 1px solid #e8eaed; padding-top: 16px; }
+        .footer a { color: #1a73e8; text-decoration: none; }
     </style>
 </head>
 <body>
+    <div class="header-row">
+        <h1 class="logo-text">GSOpt</h1>
+        <a href="https://paulnorman.cc/gsopt/" target="_blank" class="doc-link" title="Open the full documentation">Docs</a>
+    </div>
+
     <div id="settings-section" class="section">
-        <h2 onclick="toggleSection('settings-section')"><span class="triangle"></span>Optimizer Settings</h2>
+        <h2 onclick="toggleSection('settings-section')" title="Configure the mathematical model and sampling behavior">
+            <span class="triangle"></span>Optimizer Settings
+        </h2>
         <div class="section-content">
-            <div class="form-group">
+            <div class="form-group" title="The primary regression model used to approximate your data">
                 <label>Base Estimator</label>
                 <select id="base_estimator">
                     <option value="Gaussian Process (GP)">Gaussian Process (GP)</option>
@@ -36,7 +54,7 @@
                     <option value="Gradient Boosted Regression Trees (GBRT)">Gradient Boosted Regression Trees (GBRT)</option>
                 </select>
             </div>
-            <div class="form-group">
+            <div class="form-group" title="The logic used to choose the next most promising points">
                 <label>Acquisition Function</label>
                 <select id="acquisition_function">
                     <option value="Expected Improvement (EI)">Expected Improvement (EI)</option>
@@ -45,15 +63,15 @@
                     <option value="Hedge (gp_hedge)">Hedge (gp_hedge)</option>
                 </select>
             </div>
-            <div class="form-group">
+            <div class="form-group" title="Number of random points to sample before the model takes control">
                 <label>Number of Initial Points</label>
                 <input type="number" id="num_init_points" value="10" min="1">
             </div>
-            <div class="form-group">
+            <div class="form-group" title="How many new suggestions to generate per request">
                 <label>Batch Size</label>
                 <input type="number" id="batch_size" value="5" min="1">
             </div>
-            <div class="form-group">
+            <div class="form-group" title="Choose whether the goal is to find the smallest or largest value">
                 <label>Optimization Mode</label>
                 <select id="optimization_mode">
                     <option value="Minimize">Minimize</option>
@@ -64,18 +82,25 @@
     </div>
 
     <div id="controls-section" class="section">
-        <h2 onclick="toggleSection('controls-section')"><span class="triangle"></span>Optimizer Controls</h2>
+        <h2 onclick="toggleSection('controls-section')" title="Actions to run the optimizer and check the backend">
+            <span class="triangle"></span>Optimizer Controls
+        </h2>
         <div class="section-content">
-            <button id="btnInit" onclick="askForInitPoints()">Initialize Points</button>
-            <button id="btnContinue" onclick="tellAsk()">Continue Optimization</button>
-            <button id="btnTest" class="secondary" onclick="testConnection()">Test Connection</button>
+            <button id="btnInit" onclick="askForInitPoints()" title="Clear existing data and generate fresh starting points">Initialize</button>
+            <button id="btnContinue" onclick="tellAsk()" title="Analyze evaluated data and generate new suggestions">Ask</button>
+            <button id="btnTest" class="secondary" onclick="testConnection()" title="Verify that the optimizer server is reachable">Test Connection</button>
         </div>
     </div>
 
     <div id="plots-section" class="section">
-        <h2 onclick="toggleSection('plots-section')"><span class="triangle"></span>Data Plots</h2>
+        <h2 onclick="toggleSection('plots-section')" title="Advanced multi-dimensional data visualization">
+            <span class="triangle"></span>Data Plots
+        </h2>
         <div class="section-content">
-            <button onclick="openParallelCoords()">Open Parallel Coordinates</button>
+            <button class="secondary" onclick="google.script.run.openConvergencePlot()" title="View how the objective improved over iterations">Convergence Plot</button>
+            <button class="secondary" onclick="google.script.run.openEvaluationsPlot()" title="View the order and distribution of sampled points">Evaluations Plot</button>
+            <button class="secondary" onclick="google.script.run.openObjectivePlot()" title="Visualize the surrogate model's multi-dimensional surface">Objective Plot</button>
+            <button onclick="openParallelCoords()" title="Open an interactive multi-axis view of all parameters">Open Parallel Coordinates</button>
         </div>
     </div>
 
