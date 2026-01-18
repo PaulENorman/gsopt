@@ -203,10 +203,18 @@ def continue_optimization() -> Tuple[Any, int]:
         optimizer = build_optimizer(settings, existing_data)
         
         new_points = optimizer.ask(n_points=settings.batch_size)
+        
+        # Ensure new_points is always a list of lists (multiple points)
+        if len(new_points) > 0 and not isinstance(new_points[0], (list, np.ndarray)):
+            new_points = [new_points]
+            
         logger.info(f"Generated {len(new_points)} new points")
         
         for i, point in enumerate(new_points):
-            logger.debug(f"New point {i}: {[f'{val:.4f}' for val in point]}")
+            try:
+                logger.debug(f"New point {i}: {[f'{val:.4f}' for val in point]}")
+            except TypeError:
+                logger.debug(f"New point {i}: {point}")
         
         result_data = format_points_response(new_points, settings.param_names)
         
@@ -451,10 +459,18 @@ def continue_optimization():
         optimizer = build_optimizer(settings, existing_data)
         
         new_points = optimizer.ask(n_points=settings.batch_size)
+        
+        # Ensure new_points is always a list of lists (multiple points)
+        if len(new_points) > 0 and not isinstance(new_points[0], (list, np.ndarray)):
+            new_points = [new_points]
+            
         logger.info(f"Generated {len(new_points)} new points")
         
         for i, point in enumerate(new_points):
-            logger.debug(f"New point {i}: {[f'{val:.4f}' for val in point]}")
+            try:
+                logger.debug(f"New point {i}: {[f'{val:.4f}' for val in point]}")
+            except TypeError:
+                logger.debug(f"New point {i}: {point}")
         
         result_data = format_points_response(new_points, settings.param_names)
         

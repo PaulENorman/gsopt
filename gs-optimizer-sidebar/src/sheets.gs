@@ -82,12 +82,14 @@ function tell_ask(settings) {
 function suggestNextPoints(sidebarSettings) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheetInfo = readOptimizerSettings();
+  const userEmail = Session.getActiveUser().getEmail();
   
   // Merge: Parameter info from Sheet + Control info from Sidebar
+  // Prepend 'SKOPT-' to the estimator as expected by the backend build_optimizer logic
   const settings = {
     ...sheetInfo,
     ...sidebarSettings,
-    base_estimator: parseParens(sidebarSettings.base_estimator),
+    base_estimator: 'SKOPT-' + parseParens(sidebarSettings.base_estimator),
     acquisition_function: parseParens(sidebarSettings.acquisition_function)
   };
 
@@ -114,16 +116,28 @@ function suggestNextPoints(sidebarSettings) {
     existing_data: existingData
   };
 
-  const response = UrlFetchApp.fetch(`${CLOUD_RUN_URL}/suggest`, {
+  const options = {
     method: 'post',
     contentType: 'application/json',
-    payload: JSON.stringify(payload)
-  });
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+    headers: {
+      'X-User-Email': userEmail,
+      'Authorization': 'Bearer ' + ScriptApp.getIdentityToken()
+    }
+  };
+
+  // Uses /continue-optimization as it handles both initial and subsequent states
+  const response = UrlFetchApp.fetch(`${CLOUD_RUN_URL}/continue-optimization`, options);
   
+  if (response.getResponseCode() !== 200) {
+    throw new Error(`Cloud Run Error: ${response.getContentText()}`);
+  }
+
   const result = JSON.parse(response.getContentText());
-  if (result.suggestions && result.suggestions.length > 0) {
-    writePointsToSheet(dataSheet, result.suggestions, settings, Math.max(DATA_START_ROW, lastRow + 1), nextIteration);
-    return `Generated ${result.suggestions.length} suggestions.`;
+  if (result.data && result.data.length > 0) {
+    writePointsToSheet(dataSheet, result.data, settings, Math.max(DATA_START_ROW, lastRow + 1), nextIteration);
+    return result.message || `Generated ${result.data.length} suggestions.`;
   }
   return 'No points suggested.';
 }
@@ -242,9 +256,28 @@ function writePointsToSheet(sheet, points, settings, startRow, startIteration) {
 }
 
 function testCloudRunConnection() {
+  const userEmail = Session.getActiveUser().getEmail();
   try {
-    const response = UrlFetchApp.fetch(`${CLOUD_RUN_URL}/health`);
-    return { status: 'success', message: 'Connected: ' + response.getContentText() };
+    const options = {
+      method: 'post',
+      contentType: 'application/json',
+      muteHttpExceptions: true,
+      headers: {
+        'X-User-Email': userEmail,
+        'Authorization': 'Bearer ' + ScriptApp.getIdentityToken()
+      },
+      payload: JSON.stringify({})
+    };
+    
+    const response = UrlFetchApp.fetch(`${CLOUD_RUN_URL}/test-connection`, options);
+    const code = response.getResponseCode();
+    const content = response.getContentText();
+    
+    if (code === 200) {
+       return { status: 'success', message: 'Connected: ' + content };
+    } else {
+       return { status: 'error', message: `Server returned ${code}: ${content}` };
+    }
   } catch (e) {
     return { status: 'error', message: 'Connection failed: ' + e.toString() };
   }

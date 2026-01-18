@@ -1,3 +1,6 @@
  __pycache__/
 .DS_Store
+.clasp.json
+__pycache__
+
 
