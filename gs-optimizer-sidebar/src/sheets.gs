@@ -238,23 +238,21 @@ function getInitialSettings() {
 }
 
 function ask_for_init_points(settings) {
-  return { status: 'success', message: suggestNextPoints(settings) };
+  return { status: 'success', message: suggestNextPoints(settings, true) };
 }
 
 function tell_ask(settings) {
-  return { status: 'success', message: suggestNextPoints(settings) };
+  return { status: 'success', message: suggestNextPoints(settings, false) };
 }
 
 /**
  * Logic to communicate with the Cloud Run optimizer backend.
  */
-function suggestNextPoints(sidebarSettings) {
+function suggestNextPoints(sidebarSettings, isInit) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheetInfo = readOptimizerSettings();
   const userEmail = Session.getActiveUser().getEmail();
   
-  // Merge: Parameter info from Sheet + Control info from Sidebar
-  // Prepend 'SKOPT-' to the estimator as expected by the backend build_optimizer logic
   const settings = {
     ...sheetInfo,
     ...sidebarSettings,
@@ -269,7 +267,8 @@ function suggestNextPoints(sidebarSettings) {
 
   const isMinimize = settings.optimization_mode === 'Minimize';
 
-  if (lastRow >= DATA_START_ROW) {
+  // Only read existing evaluation data if we are NOT initializing
+  if (!isInit && lastRow >= DATA_START_ROW) {
     const allData = readDataFromSheet(dataSheet, settings, DATA_START_ROW, lastRow);
     existingData = allData
       .filter(d => d.objective !== '' && d.objective !== null)
@@ -296,8 +295,8 @@ function suggestNextPoints(sidebarSettings) {
     }
   };
 
-  // Uses /continue-optimization as it handles both initial and subsequent states
-  const response = UrlFetchApp.fetch(`${CLOUD_RUN_URL}/continue-optimization`, options);
+  const endpoint = isInit ? '/init-optimization' : '/continue-optimization';
+  const response = UrlFetchApp.fetch(`${CLOUD_RUN_URL}${endpoint}`, options);
   
   if (response.getResponseCode() !== 200) {
     throw new Error(`Cloud Run Error: ${response.getContentText()}`);
@@ -305,7 +304,14 @@ function suggestNextPoints(sidebarSettings) {
 
   const result = JSON.parse(response.getContentText());
   if (result.data && result.data.length > 0) {
-    writePointsToSheet(dataSheet, result.data, settings, Math.max(DATA_START_ROW, lastRow + 1), nextIteration);
+    // If initializing, clear the data sheet first
+    if (isInit && lastRow >= DATA_START_ROW) {
+      dataSheet.getRange(DATA_START_ROW, 1, lastRow - DATA_START_ROW + 1, dataSheet.getMaxColumns()).clearContent();
+      updateDataSheetHeaders(); // Reset formatting/headers
+    }
+    
+    const writeRow = isInit ? DATA_START_ROW : Math.max(DATA_START_ROW, lastRow + 1);
+    writePointsToSheet(dataSheet, result.data, settings, writeRow, nextIteration);
     return result.message || `Generated ${result.data.length} suggestions.`;
   }
   return 'No points suggested.';

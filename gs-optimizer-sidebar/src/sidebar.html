@@ -32,6 +32,21 @@
         #message { margin-top: 20px; padding: 12px; border-radius: 8px; font-size: 0.85em; display: none; }
         .footer { margin-top: 32px; text-align: center; font-size: 0.75em; color: #70757a; border-top: 1px solid #e8eaed; padding-top: 16px; }
         .footer a { color: #1a73e8; text-decoration: none; }
+
+        .info-icon {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            background: #e8eaed;
+            color: #5f6368;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 14px;
+            font-size: 10px;
+            margin-left: 5px;
+            cursor: help;
+            vertical-align: middle;
+        }
     </style>
 </head>
 <body>
@@ -41,12 +56,12 @@
     </div>
 
     <div id="settings-section" class="section">
-        <h2 onclick="toggleSection('settings-section')" title="Configure the mathematical model and sampling behavior">
-            <span class="triangle"></span>Optimizer Settings
+        <h2 onclick="toggleSection('settings-section')">
+            <span class="triangle"></span>Optimizer Settings <span class="info-icon" title="Configure the mathematical model and sampling behavior">?</span>
         </h2>
         <div class="section-content">
-            <div class="form-group" title="The primary regression model used to approximate your data">
-                <label>Base Estimator</label>
+            <div class="form-group">
+                <label>Base Estimator <span class="info-icon" title="The primary regression model used to approximate your data">?</span></label>
                 <select id="base_estimator">
                     <option value="Gaussian Process (GP)">Gaussian Process (GP)</option>
                     <option value="Random Forrest (RF)">Random Forrest (RF)</option>
@@ -54,25 +69,29 @@
                     <option value="Gradient Boosted Regression Trees (GBRT)">Gradient Boosted Regression Trees (GBRT)</option>
                 </select>
             </div>
-            <div class="form-group" title="The logic used to choose the next most promising points">
-                <label>Acquisition Function</label>
-                <select id="acquisition_function">
+            <div class="form-group">
+                <label>Acquisition Function <span class="info-icon" title="The logic used to choose the next most promising points">?</span></label>
+                <select id="acquisition_function" onchange="toggleKappa()">
                     <option value="Expected Improvement (EI)">Expected Improvement (EI)</option>
                     <option value="Probability of Improvement (PI)">Probability of Improvement (PI)</option>
                     <option value="Lower Confidence Bound (LCB)">Lower Confidence Bound (LCB)</option>
                     <option value="Hedge (gp_hedge)">Hedge (gp_hedge)</option>
                 </select>
             </div>
-            <div class="form-group" title="Number of random points to sample before the model takes control">
-                <label>Number of Initial Points</label>
+            <div class="form-group" id="kappa-group" style="display:none;">
+                <label>Kappa (LCB Only) <span class="info-icon" title="Controls exploration vs exploitation. Low kappa (e.g., 0.1) exploits known good areas; high kappa (e.g., 5.0) explores uncertainty.">?</span></label>
+                <input type="number" id="acq_func_kappa" value="1.96" step="0.1" min="0">
+            </div>
+            <div class="form-group">
+                <label>Number of Initial Points <span class="info-icon" title="Number of random points to sample before the model takes control">?</span></label>
                 <input type="number" id="num_init_points" value="10" min="1">
             </div>
-            <div class="form-group" title="How many new suggestions to generate per request">
-                <label>Batch Size</label>
+            <div class="form-group">
+                <label>Batch Size <span class="info-icon" title="How many new suggestions to generate per request">?</span></label>
                 <input type="number" id="batch_size" value="5" min="1">
             </div>
-            <div class="form-group" title="Choose whether the goal is to find the smallest or largest value">
-                <label>Optimization Mode</label>
+            <div class="form-group">
+                <label>Optimization Mode <span class="info-icon" title="Choose whether the goal is to find the smallest or largest value">?</span></label>
                 <select id="optimization_mode">
                     <option value="Minimize">Minimize</option>
                     <option value="Maximize">Maximize</option>
@@ -82,25 +101,25 @@
     </div>
 
     <div id="controls-section" class="section">
-        <h2 onclick="toggleSection('controls-section')" title="Actions to run the optimizer and check the backend">
-            <span class="triangle"></span>Optimizer Controls
+        <h2 onclick="toggleSection('controls-section')">
+            <span class="triangle"></span>Optimizer Controls <span class="info-icon" title="Actions to run the optimizer and check the backend">?</span>
         </h2>
         <div class="section-content">
-            <button id="btnInit" onclick="askForInitPoints()" title="Clear existing data and generate fresh starting points">Initialize</button>
+            <button id="btnInit" onclick="askForInitPoints()" title="Clear existing data and generate initial points using Latin Hypercube Sampling">Initialize</button>
             <button id="btnContinue" onclick="tellAsk()" title="Analyze evaluated data and generate new suggestions">Ask</button>
             <button id="btnTest" class="secondary" onclick="testConnection()" title="Verify that the optimizer server is reachable">Test Connection</button>
         </div>
     </div>
 
     <div id="plots-section" class="section">
-        <h2 onclick="toggleSection('plots-section')" title="Advanced multi-dimensional data visualization">
-            <span class="triangle"></span>Data Plots
+        <h2 onclick="toggleSection('plots-section')">
+            <span class="triangle"></span>Data Plots <span class="info-icon" title="Advanced multi-dimensional data visualization">?</span>
         </h2>
         <div class="section-content">
-            <button class="secondary" onclick="google.script.run.openConvergencePlot()" title="View how the objective improved over iterations">Convergence Plot</button>
-            <button class="secondary" onclick="google.script.run.openEvaluationsPlot()" title="View the order and distribution of sampled points">Evaluations Plot</button>
-            <button class="secondary" onclick="google.script.run.openObjectivePlot()" title="Visualize the surrogate model's multi-dimensional surface">Objective Plot</button>
-            <button onclick="openParallelCoords()" title="Open an interactive multi-axis view of all parameters">Open Parallel Coordinates</button>
+            <button onclick="google.script.run.openConvergencePlot()" title="View how the objective improved over iterations">Convergence Plot</button>
+            <button onclick="google.script.run.openEvaluationsPlot()" title="View the order and distribution of sampled points">Evaluations Plot</button>
+            <button onclick="google.script.run.openObjectivePlot()" title="Objective Partial Dependence">Objective Plot</button>
+            <button onclick="openParallelCoords()" title="Open an interactive multi-axis view of all parameters">Parallel Coordinates</button>
         </div>
     </div>
 
@@ -113,6 +132,16 @@
     <script>
         function toggleSection(id) {
             document.getElementById(id).classList.toggle('collapsed');
+        }
+
+        function toggleKappa() {
+            const select = document.getElementById('acquisition_function');
+            const kappaGroup = document.getElementById('kappa-group');
+            if (select.value.indexOf('LCB') !== -1) {
+                kappaGroup.style.display = 'block';
+            } else {
+                kappaGroup.style.display = 'none';
+            }
         }
 
         // Initialize dynamic parts
@@ -129,9 +158,17 @@
             setSelectByValueFragment('base_estimator', s.base_estimator);
             setSelectByValueFragment('acquisition_function', s.acquisition_function);
             
-            document.getElementById('num_init_points').value = s.num_init_points;
-            document.getElementById('batch_size').value = s.batch_size;
+            // Defaulting based on num_params: Initial = Params * 10, Batch = Params * 5
+            const nParams = s.num_params || 1;
+            document.getElementById('num_init_points').value = nParams * 10;
+            document.getElementById('batch_size').value = nParams * 5;
+            
             document.getElementById('optimization_mode').value = s.optimization_mode || 'Minimize';
+            
+            if (s.acq_func_kwargs && s.acq_func_kwargs.kappa) {
+                document.getElementById('acq_func_kappa').value = s.acq_func_kwargs.kappa;
+            }
+            toggleKappa();
         }
 
         function setSelectByValueFragment(id, fragment) {
@@ -145,13 +182,21 @@
         }
 
         function collectSettings() {
-            return {
+            const acqFunc = document.getElementById('acquisition_function').value;
+            const settings = {
                 base_estimator: document.getElementById('base_estimator').value,
-                acquisition_function: document.getElementById('acquisition_function').value,
+                acquisition_function: acqFunc,
                 num_init_points: parseInt(document.getElementById('num_init_points').value),
                 batch_size: parseInt(document.getElementById('batch_size').value),
-                optimization_mode: document.getElementById('optimization_mode').value
+                optimization_mode: document.getElementById('optimization_mode').value,
+                acq_func_kwargs: {}
             };
+            
+            if (acqFunc.indexOf('LCB') !== -1) {
+                settings.acq_func_kwargs['kappa'] = parseFloat(document.getElementById('acq_func_kappa').value);
+            }
+            
+            return settings;
         }
 
         function askForInitPoints() {
