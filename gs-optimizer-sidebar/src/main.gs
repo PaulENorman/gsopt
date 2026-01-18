@@ -1,22 +1,29 @@
+/**
+ * Creates a custom menu in Google Sheets when the spreadsheet opens.
+ */
 function onOpen() {
-  /**
-   * Creates custom menu when spreadsheet opens.
-   */
   SpreadsheetApp.getUi()
-      .createMenu('Optimizer')
-      .addItem('Open Sidebar', 'openSidebar')
+      .createMenu('Bayesian Optimization')
+      .addItem('Open Sidebar', 'showSidebar')
       .addToUi();
 }
 
-function openSidebar() {
-  /**
-   * Opens the sidebar in the Google Sheets UI.
-   */
-  const html = HtmlService.createHtmlOutputFromFile('sidebar')
-      .setTitle('Optimizer Control Panel')
-      .setSandboxMode(HtmlService.SandboxMode.IFRAME)
+/**
+ * Opens a sidebar in the document containing the add-on's user interface.
+ */
+function showSidebar() {
+  var html = HtmlService.createHtmlOutputFromFile('sidebar')
+      .setTitle('Bayesian Optimization')
       .setWidth(300);
   SpreadsheetApp.getUi().showSidebar(html);
+}
+
+/**
+ * Include function to allow splitting HTML into multiple files if needed (not strictly used here but good practice).
+ */
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename)
+      .getContent();
 }
 
 function getInitialSettings() {

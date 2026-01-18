@@ -550,3 +550,94 @@ function testCloudRunConnection() {
     return { status: 'error', message: 'Connection failed: ' + e.toString() };
   }
 }
+
+/**
+ * Wrapper function called by the sidebar to test connection.
+ */
+function handleTestConnection() {
+  return testConnection();
+}
+
+/**
+ * Reads data from the active sheet and sends it to the optimization API.
+ * This is a simplified example assuming headers are in row 1 and data follows.
+ */
+function handleInitializeOptimization() {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const dataRange = sheet.getDataRange();
+  const values = dataRange.getValues();
+  
+  if (values.length < 2) {
+    throw new Error("Sheet must contain headers and at least one row of data/config.");
+  }
+
+  // Construct payload based on sheet data structure expected by backend
+  const payload = {
+    headers: values[0],
+    data: values.slice(1),
+    // Add configuration parameters if stored in specific cells or properties
+  };
+
+  try {
+    const result = initializeOptimization(payload);
+    
+    // Process result: e.g., write suggestions to sheet
+    if (result && result.next_points) {
+        appendResultsToSheet(sheet, result.next_points);
+        return "Optimization initialized. Next points added.";
+    }
+    return "Optimization initialized successfully.";
+  } catch (e) {
+    throw e.message;
+  }
+}
+
+/**
+ * Wrapper for continuing optimization.
+ */
+function handleContinueOptimization() {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const dataRange = sheet.getDataRange();
+  const values = dataRange.getValues();
+  
+  const payload = {
+    headers: values[0],
+    data: values.slice(1),
+    is_continuation: true
+  };
+
+  try {
+    const result = continueOptimization(payload);
+     if (result && result.next_points) {
+        appendResultsToSheet(sheet, result.next_points);
+        return "Optimization continued. New points added.";
+    }
+    return "Optimization step complete.";
+  } catch (e) {
+    throw e.message;
+  }
+}
+
+/**
+ * Helper to append new recommended points to the sheet.
+ */
+function appendResultsToSheet(sheet, points) {
+  // points is assumed to be an array of arrays or objects
+  // appropriate transformation needed based on API response structure
+  if (Array.isArray(points) && points.length > 0) {
+      // Check if it's array of objects or array of arrays
+      let rowsToAdd = points;
+      if (!Array.isArray(points[0])) {
+          // Convert objects to array based on headers if necessary, 
+          // here we assume simple array of arrays for simplicity
+          rowsToAdd = points.map(p => Object.values(p));
+      }
+      
+      const lastRow = sheet.getLastRow();
+      const startRow = lastRow + 1;
+      const numRows = rowsToAdd.length;
+      const numCols = rowsToAdd[0].length;
+      
+      sheet.getRange(startRow, 1, numRows, numCols).setValues(rowsToAdd);
+  }
+}

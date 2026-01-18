@@ -1,3 +1,70 @@
+// Replace with your actual Cloud Run Service URL
+const CLOUD_RUN_URL = 'https://your-cloud-run-service-url.run.app';
+
+/**
+ * Calls the /test endpoint of the Cloud Run service.
+ */
+function testConnection() {
+  try {
+    const response = UrlFetchApp.fetch(CLOUD_RUN_URL + '/test', {
+      'method': 'get',
+      'muteHttpExceptions': true
+    });
+    return response.getContentText();
+  } catch (e) {
+    return 'Error: ' + e.toString();
+  }
+}
+
+/**
+ * Calls the /optimize endpoint to initialize optimization.
+ * @param {Object} payload Data from the sheet.
+ */
+function initializeOptimization(payload) {
+  return callEndpoint('/optimize', payload);
+}
+
+/**
+ * Calls the /optimize endpoint to continue optimization (append new points).
+ * @param {Object} payload Data from the sheet including new points.
+ */
+function continueOptimization(payload) {
+    // Assuming backend handles initialization vs continuation based on payload content or a flag
+    // Often continuation uses the same endpoint but with different parameters
+  return callEndpoint('/optimize', payload); 
+}
+
+/**
+ * Helper function to make POST requests.
+ */
+function callEndpoint(endpoint, payload) {
+  const options = {
+    'method': 'post',
+    'contentType': 'application/json',
+    'payload': JSON.stringify(payload),
+    'muteHttpExceptions': true
+  };
+  
+  try {
+    const response = UrlFetchApp.fetch(CLOUD_RUN_URL + endpoint, options);
+    const responseCode = response.getResponseCode();
+    const content = response.getContentText();
+    
+    if (responseCode >= 200 && responseCode < 300) {
+      // Parse JSON response if possible
+      try {
+        return JSON.parse(content);
+      } catch (e) {
+        return { message: content };
+      }
+    } else {
+      throw new Error(`Server returned code ${responseCode}: ${content}`);
+    }
+  } catch (e) {
+    throw new Error('API Call Failed: ' + e.message);
+  }
+}
+
 function initOptimization() {
   const settings = readOptimizerSettings();
   return callCloudRunEndpoint('/init-optimization', { settings: settings });
