@@ -83,9 +83,56 @@ function openParallelCoordinates() {
 }
 
 /**
- * Requests a specific skopt plot from the backend and shows it in a dialog.
+ * Opens a dialog that loads the plot asynchronously.
  */
-function showSkoptPlot(plotType, title) {
+function showSkoptPlotDialog(plotType, title) {
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <base target="_top">
+        <style>
+          body { margin:0; display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#ffffff; font-family: sans-serif; }
+          .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 15px; }
+          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+          #status { color: #555; font-size: 16px; margin-bottom: 10px; }
+          img { max-width: 98%; max-height: 98%; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: none; border: 1px solid #ddd; }
+          .error { color: #d32f2f; padding: 20px; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <div id="loader" class="loader"></div>
+        <div id="status">Generating ${title}...<br><span style="font-size:0.8em; color:#888;">This may take a moment for complex models.</span></div>
+        <img id="plotImage" />
+        <script>
+          window.onload = function() {
+            google.script.run
+              .withSuccessHandler(function(base64) {
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('status').style.display = 'none';
+                var img = document.getElementById('plotImage');
+                img.src = "data:image/png;base64," + base64;
+                img.style.display = 'block';
+              })
+              .withFailureHandler(function(err) {
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('status').innerHTML = '<div class="error">Error generating plot:<br>' + err + '</div>';
+              })
+              .getPlotData('${plotType}');
+          };
+        </script>
+      </body>
+    </html>
+  `;
+  
+  const htmlOutput = HtmlService.createHtmlOutput(htmlContent).setWidth(900).setHeight(700);
+  SpreadsheetApp.getUi().showModelessDialog(htmlOutput, title);
+}
+
+/**
+ * Server-side handler to fetch plot data. Called by the client-side JS in the dialog.
+ */
+function getPlotData(plotType) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheetInfo = readOptimizerSettings();
   const userEmail = Session.getActiveUser().getEmail();
@@ -94,9 +141,10 @@ function showSkoptPlot(plotType, title) {
   if (!dataSheet) throw new Error("Data sheet not found");
 
   const lastRow = dataSheet.getLastRow();
+  // Ensure we use SKOPT-GP for plotting as it provides the best visual models
   const settings = {
     ...sheetInfo,
-    base_estimator: 'SKOPT-GP', // Defaulting for visual context
+    base_estimator: 'SKOPT-GP',
     acquisition_function: 'EI'
   };
 
@@ -107,8 +155,7 @@ function showSkoptPlot(plotType, title) {
   }
 
   if (existingData.length === 0) {
-    SpreadsheetApp.getUi().alert("No evaluated data available to plot.");
-    return;
+    throw new Error("No evaluated data available to plot. Please run optimization first.");
   }
 
   const payload = {
@@ -124,30 +171,34 @@ function showSkoptPlot(plotType, title) {
     headers: {
       'X-User-Email': userEmail,
       'Authorization': 'Bearer ' + ScriptApp.getIdentityToken()
-    }
+    },
+    muteHttpExceptions: true
   };
 
   const response = UrlFetchApp.fetch(`${CLOUD_RUN_URL}/plot`, options);
-  const result = JSON.parse(response.getContentText());
+  const responseCode = response.getResponseCode();
+  const responseText = response.getContentText();
 
+  if (responseCode !== 200) {
+    let errMsg = responseText;
+    try {
+        const jsonErr = JSON.parse(responseText);
+        errMsg = jsonErr.message || responseText;
+    } catch(e) {}
+    throw new Error(`Server Error (${responseCode}): ${errMsg}`);
+  }
+
+  const result = JSON.parse(responseText);
   if (result.status === 'success') {
-    const html = `
-      <html>
-        <body style="margin:0; display:flex; justify-content:center; align-items:center; background:#f5f5f5;">
-          <img src="data:image/png;base64,${result.plot_data}" style="max-width:100%; max-height:100%; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.15);">
-        </body>
-      </html>
-    `;
-    const dialog = HtmlService.createHtmlOutput(html).setWidth(850).setHeight(650);
-    SpreadsheetApp.getUi().showModelessDialog(dialog, title);
+    return result.plot_data;
   } else {
     throw new Error(result.message);
   }
 }
 
-function openConvergencePlot() { showSkoptPlot('convergence', 'Convergence Plot'); }
-function openEvaluationsPlot() { showSkoptPlot('evaluations', 'Evaluations Plot'); }
-function openObjectivePlot() { showSkoptPlot('objective', 'Objective Plot'); }
+function openConvergencePlot() { showSkoptPlotDialog('convergence', 'Convergence Plot'); }
+function openEvaluationsPlot() { showSkoptPlotDialog('evaluations', 'Evaluations Plot'); }
+function openObjectivePlot() { showSkoptPlotDialog('objective', 'Objective Plot'); }
 
 /**
  * Fetches data for the PCP visualization.
@@ -335,20 +386,30 @@ function updateDataSheetHeaders() {
   headers.push(objectiveName);
 
   const maxCols = dataSheet.getMaxColumns();
+  const maxRows = dataSheet.getMaxRows();
+
+  // Clear ALL headers first
   dataSheet.getRange(1, 1, 1, maxCols).clearContent().setBackground(null);
   
-  // Write and style headers
+  // Write and style NEW headers
   dataSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   dataSheet.getRange(1, 1).setBackground(COLORS.ITER_HEADER);
   if (numParams > 0) dataSheet.getRange(1, 2, 1, numParams).setBackground(COLORS.PARAM_HEADER);
   dataSheet.getRange(1, headers.length).setBackground(COLORS.OBJ_HEADER);
 
-  // Style columns for existing data (Row 2 to Max)
-  const maxRows = dataSheet.getMaxRows();
+  // Style columns for existing data (Row 2 to Max) based on active headers
   if (maxRows > 1) {
     dataSheet.getRange(2, 1, maxRows - 1, 1).setBackground(COLORS.ITER_DATA);
     if (numParams > 0) dataSheet.getRange(2, 2, maxRows - 1, numParams).setBackground(COLORS.PARAM_DATA);
     dataSheet.getRange(2, headers.length, maxRows - 1, 1).setBackground(COLORS.OBJ_DATA);
+  }
+
+  // CLEANUP: Effectively delete content and formatting for stale columns
+  if (headers.length < maxCols) {
+    const startClearCol = headers.length + 1;
+    const numClearCols = maxCols - headers.length;
+    // Clear the entire column block from Row 1 down to Max Row
+    dataSheet.getRange(1, startClearCol, maxRows, numClearCols).clearContent().setBackground(null);
   }
 }
 

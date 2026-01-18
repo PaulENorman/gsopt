@@ -290,15 +290,16 @@ def generate_plot() -> Tuple[Any, int]:
         if not res.x_iters or len(res.x_iters) == 0:
             return jsonify({"status": "error", "message": "No data available to plot"}), 400
 
-        # Adjust figure size based on plot type
-        plt.figure(figsize=(10, 8))
+        # Adjust figure size based on plot type - Increased sizes for readability
         if plot_type == 'objective' or plot_type == 'evaluations':
              # Matrix plots need more space, especially for >3 dimensions
              dim_count = len(settings.param_names)
-             fig_size = max(8, dim_count * 2.5) 
+             # Increased multiplier and base size
+             fig_size = max(12, dim_count * 4) 
              plt.figure(figsize=(fig_size, fig_size))
         else:
-             plt.figure(figsize=(10, 6))
+             # Increased standard plot size
+             plt.figure(figsize=(14, 10))
 
         try:
             if plot_type == 'convergence':
