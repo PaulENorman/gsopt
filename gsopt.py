@@ -240,7 +240,9 @@ def test_connection() -> Tuple[Any, int]:
     if not is_valid:
         return jsonify({"status": "error", "message": error_msg}), 403
 
-    commit_sha = os.environ.get('COMMIT_SHA', 'development')
+    # Prioritize environmental sha from build processes
+    commit_sha = os.environ.get('COMMIT_SHA') or os.environ.get('GAE_VERSION') or 'development'
+    
     logger.info(f"Connection test successful for: {email} (Build: {commit_sha})")
     return jsonify({
         "status": "success",

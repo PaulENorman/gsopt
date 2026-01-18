@@ -72,6 +72,14 @@
         </div>
     </div>
 
+    <div id="plots-section" class="section">
+        <h2 onclick="toggleSection('plots-section')"><span class="triangle"></span>Data Plots</h2>
+        <div class="section-content">
+            <button onclick="updatePlots()">Update Analysis Plots</button>
+            <button class="secondary" style="background: #ea4335;" onclick="deletePlots()">Delete All Plots</button>
+        </div>
+    </div>
+
     <div id="message"></div>
 
     <div class="footer">
@@ -146,6 +154,20 @@
                 .withSuccessHandler(r => { setLoading(false); showMessage(r); })
                 .withFailureHandler(err => { setLoading(false); showMessage({status: 'error', message: err}); })
                 .testCloudRunConnection();
+        }
+
+        function updatePlots() {
+            setLoading(true);
+            google.script.run
+                .withSuccessHandler(r => { setLoading(false); showMessage({status: 'success', message: 'Plots updated.'}); })
+                .withFailureHandler(err => { setLoading(false); showMessage({status: 'error', message: err}); })
+                .updateAnalysisPlots();
+        }
+
+        function deletePlots() {
+            if (!confirm('Are you sure you want to delete all charts on the Analysis tab?')) return;
+            google.script.run.deleteAnalysisPlots();
+            showMessage({status: 'success', message: 'Plots deleted.'});
         }
 
         function showMessage(response) {
