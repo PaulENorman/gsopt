@@ -272,26 +272,49 @@ def generate_plot() -> Tuple[Any, int]:
         settings = OptimizerSettings.from_dict(data.get('settings', {}))
         existing_data = data.get('existing_data', [])
 
-        optimizer = build_optimizer(settings, existing_data)
+        optimizer_wrapper = build_optimizer(settings, existing_data)
         
-        # Create skopt result object needed for plotting
-        res = OptimizeResult()
-        res.x_iters = optimizer.Xi
-        res.func_vals = optimizer.yi
-        res.space = optimizer.space
-        if len(res.func_vals) > 0:
-            res.x = res.x_iters[np.argmin(res.func_vals)]
-            res.fun = np.min(res.func_vals)
+        # Access the inner skopt.Optimizer instance from the wrapper
+        if hasattr(optimizer_wrapper, 'optimizer'):
+            skopt_opt = optimizer_wrapper.optimizer
         else:
+            skopt_opt = optimizer_wrapper
+        
+        # skopt.Optimizer has a get_result() method that returns the full OptimizeResult object
+        # which contains the fitted models needed for plot_objective
+        if not hasattr(skopt_opt, 'get_result'):
+             return jsonify({"status": "error", "message": "Optimizer backend does not support get_result()."}), 400
+
+        res = skopt_opt.get_result()
+        
+        if not res.x_iters or len(res.x_iters) == 0:
             return jsonify({"status": "error", "message": "No data available to plot"}), 400
 
+        # Adjust figure size based on plot type
         plt.figure(figsize=(10, 8))
-        if plot_type == 'convergence':
-            plot_convergence(res)
-        elif plot_type == 'evaluations':
-            plot_evaluations(res)
-        elif plot_type == 'objective':
-            plot_objective(res)
+        if plot_type == 'objective' or plot_type == 'evaluations':
+             # Matrix plots need more space, especially for >3 dimensions
+             dim_count = len(settings.param_names)
+             fig_size = max(8, dim_count * 2.5) 
+             plt.figure(figsize=(fig_size, fig_size))
+        else:
+             plt.figure(figsize=(10, 6))
+
+        try:
+            if plot_type == 'convergence':
+                plot_convergence(res)
+                plt.title("Convergence Plot")
+            elif plot_type == 'evaluations':
+                plot_evaluations(res, bins=10)
+                plt.suptitle("Evaluations Matrix", fontsize=16)
+            elif plot_type == 'objective':
+                # plot_objective requires the models to be fitted.
+                # Since we called tell() in build_optimizer, the last model in res.models should be valid.
+                plot_objective(res, size=3) 
+                plt.suptitle("Objective Partial Dependence", fontsize=16)
+        except Exception as plot_err:
+             logger.error(f"Specific plotting error: {plot_err}")
+             return jsonify({"status": "error", "message": f"Error creating {plot_type}: {str(plot_err)}"}), 500
         
         buf = io.BytesIO()
         plt.savefig(buf, format='png', bbox_inches='tight')
