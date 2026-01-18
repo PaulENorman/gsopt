@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 15px; color: #333; }
+        h2 { font-size: 1.2em; border-bottom: 2px solid #4285F4; padding-bottom: 5px; margin-top: 20px; cursor: pointer; display: flex; align-items: center; }
+        .triangle { display: inline-block; width: 0; height: 0; margin-right: 10px; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid #4285F4; transition: transform 0.2s; }
+        .collapsed .triangle { transform: rotate(-90deg); }
+        .section-content { overflow: hidden; }
+        .collapsed .section-content { display: none; }
+        .section { margin-bottom: 20px; }
+        .form-group { margin-bottom: 12px; }
+        label { display: block; font-weight: bold; margin-bottom: 4px; font-size: 0.9em; }
+        select, input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { background: #4285F4; color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold; margin-bottom: 10px; }
+        button:hover { background: #357ae8; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        button.secondary { background: #34a853; }
+        button.secondary:hover { background: #2d9249; }
+        #message { margin-top: 15px; padding: 10px; border-radius: 4px; font-size: 0.9em; display: none; }
+    </style>
+</head>
+<body>
+    <div id="settings-section" class="section">
+        <h2 onclick="toggleSection('settings-section')"><span class="triangle"></span>Optimizer Settings</h2>
+        <div class="section-content">
+            <div class="form-group">
+                <label>Base Estimator</label>
+                <select id="base_estimator">
+                    <option value="Gaussian Process (GP)">Gaussian Process (GP)</option>
+                    <option value="Random Forrest (RF)">Random Forrest (RF)</option>
+                    <option value="Extra Trees (ET)">Extra Trees (ET)</option>
+                    <option value="Gradient Boosted Regression Trees (GBRT)">Gradient Boosted Regression Trees (GBRT)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Acquisition Function</label>
+                <select id="acquisition_function">
+                    <option value="Expected Improvement (EI)">Expected Improvement (EI)</option>
+                    <option value="Probability of Improvement (PI)">Probability of Improvement (PI)</option>
+                    <option value="Lower Confidence Bound (LCB)">Lower Confidence Bound (LCB)</option>
+                    <option value="Hedge (gp_hedge)">Hedge (gp_hedge)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Number of Initial Points</label>
+                <input type="number" id="num_init_points" value="10" min="1">
+            </div>
+            <div class="form-group">
+                <label>Batch Size</label>
+                <input type="number" id="batch_size" value="5" min="1">
+            </div>
+            <div class="form-group">
+                <label>Optimization Mode</label>
+                <select id="optimization_mode">
+                    <option value="Minimize">Minimize</option>
+                    <option value="Maximize">Maximize</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div id="controls-section" class="section">
+        <h2 onclick="toggleSection('controls-section')"><span class="triangle"></span>Optimizer Controls</h2>
+        <div class="section-content">
+            <button id="btnInit" onclick="askForInitPoints()">Initialize Points</button>
+            <button id="btnContinue" onclick="tellAsk()">Continue Optimization</button>
+            <button id="btnTest" class="secondary" onclick="testConnection()">Test Connection</button>
+        </div>
+    </div>
+
+    <div id="message"></div>
+
+    <script>
+        function toggleSection(id) {
+            document.getElementById(id).classList.toggle('collapsed');
+        }
+
+        // Initialize dynamic parts
+        window.onload = function() {
+            // Load initial settings from sheet
+            google.script.run
+                .withSuccessHandler(populateSettings)
+                .getInitialSettings();
+        };
+
+        function populateSettings(s) {
+            if (!s) return;
+            // Hacky way to find choice by text contains because of the parseParens logic
+            setSelectByValueFragment('base_estimator', s.base_estimator);
+            setSelectByValueFragment('acquisition_function', s.acquisition_function);
+            
+            document.getElementById('num_init_points').value = s.num_init_points;
+            document.getElementById('batch_size').value = s.batch_size;
+            document.getElementById('optimization_mode').value = s.optimization_mode || 'Minimize';
+        }
+
+        function setSelectByValueFragment(id, fragment) {
+            const el = document.getElementById(id);
+            for (let i = 0; i < el.options.length; i++) {
+                if (el.options[i].value.indexOf('(' + fragment + ')') !== -1 || el.options[i].value === fragment) {
+                    el.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+
+        function collectSettings() {
+            return {
+                base_estimator: document.getElementById('base_estimator').value,
+                acquisition_function: document.getElementById('acquisition_function').value,
+                num_init_points: parseInt(document.getElementById('num_init_points').value),
+                batch_size: parseInt(document.getElementById('batch_size').value),
+                optimization_mode: document.getElementById('optimization_mode').value
+            };
+        }
+
+        function askForInitPoints() {
+            const settings = collectSettings();
+            setLoading(true);
+            google.script.run
+                .withSuccessHandler(r => { setLoading(false); showMessage(r); })
+                .withFailureHandler(err => { setLoading(false); showMessage({status: 'error', message: err}); })
+                .ask_for_init_points(settings);
+        }
+
+        function tellAsk() {
+            const settings = collectSettings();
+            setLoading(true);
+            google.script.run
+                .withSuccessHandler(r => { setLoading(false); showMessage(r); })
+                .withFailureHandler(err => { setLoading(false); showMessage({status: 'error', message: err}); })
+                .tell_ask(settings);
+        }
+
+        function testConnection() {
+            setLoading(true);
+            google.script.run
+                .withSuccessHandler(r => { setLoading(false); showMessage(r); })
+                .withFailureHandler(err => { setLoading(false); showMessage({status: 'error', message: err}); })
+                .testCloudRunConnection();
+        }
+
+        function showMessage(response) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.style.display = 'block';
+            messageDiv.textContent = response.message || 'Operation completed.';
+            messageDiv.style.backgroundColor = response.status === 'error' ? '#fde8e8' : '#eafaf1';
+            messageDiv.style.color = response.status === 'error' ? '#c81e1e' : '#1e7e34';
+            messageDiv.style.border = `1px solid ${response.status === 'error' ? '#f8b4b4' : '#b7e4c7'}`;
+        }
+
+        function setLoading(isLoading) {
+            const buttons = document.querySelectorAll('button');
+            buttons.forEach(b => b.disabled = isLoading);
+            if (isLoading) {
+                const messageDiv = document.getElementById('message');
+                messageDiv.style.display = 'block';
+                messageDiv.textContent = 'Processing... Please wait.';
+                messageDiv.style.backgroundColor = '#e1effe';
+                messageDiv.style.color = '#1e429f';
+                messageDiv.style.border = '1px solid #a4cafe';
+            }
+        }
+    </script>
+</body>
+</html>
