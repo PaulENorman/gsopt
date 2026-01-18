@@ -13,6 +13,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 FROM python:3.12-slim
 WORKDIR /app
 
+# Accept commit SHA as build argument
+ARG COMMIT_SHA=unknown
+ENV COMMIT_SHA=${COMMIT_SHA}
+
 # Copy virtual environment from builder stage
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"

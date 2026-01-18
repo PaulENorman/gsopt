@@ -18,8 +18,10 @@ It uses a wrapper around the `scikit-optimize` library to perform the optimizati
 
 from dataclasses import dataclass
 from typing import Dict, List, Any, Optional, Tuple
+import os
 
 import jwt
+import numpy as np
 from flask import Flask, request, jsonify
 
 from utils import setup_logging, authenticate_request
@@ -213,7 +215,7 @@ def continue_optimization() -> Tuple[Any, int]:
         for i, point in enumerate(new_points):
             try:
                 logger.debug(f"New point {i}: {[f'{val:.4f}' for val in point]}")
-            except TypeError:
+            except (TypeError, ValueError):
                 logger.debug(f"New point {i}: {point}")
         
         result_data = format_points_response(new_points, settings.param_names)
@@ -238,11 +240,13 @@ def test_connection() -> Tuple[Any, int]:
     if not is_valid:
         return jsonify({"status": "error", "message": error_msg}), 403
 
-    logger.info(f"Connection test successful for: {email}")
+    commit_sha = os.environ.get('COMMIT_SHA', 'development')
+    logger.info(f"Connection test successful for: {email} (Commit: {commit_sha})")
     return jsonify({
         "status": "success",
-        "message": f"Connection verified for {email}",
-        "authenticated_user": email
+        "message": f"Connection verified for {email}. Build: {commit_sha}",
+        "authenticated_user": email,
+        "commit_sha": commit_sha
     }), 200
 
 
@@ -253,8 +257,10 @@ if __name__ == '__main__':
 
 from dataclasses import dataclass
 from typing import Dict, List, Any, Optional, Tuple
+import os
 
 import jwt
+import numpy as np
 from flask import Flask, request, jsonify
 
 from utils import setup_logging, authenticate_request
@@ -469,7 +475,7 @@ def continue_optimization():
         for i, point in enumerate(new_points):
             try:
                 logger.debug(f"New point {i}: {[f'{val:.4f}' for val in point]}")
-            except TypeError:
+            except (TypeError, ValueError):
                 logger.debug(f"New point {i}: {point}")
         
         result_data = format_points_response(new_points, settings.param_names)
@@ -497,11 +503,13 @@ def test_connection():
     if not is_valid:
         return jsonify({"status": "error", "message": error_msg}), 403
 
-    logger.info(f"Connection test successful for: {email}")
+    commit_sha = os.environ.get('COMMIT_SHA', 'development')
+    logger.info(f"Connection test successful for: {email} (Commit: {commit_sha})")
     return jsonify({
         "status": "success",
-        "message": f"Connection verified for {email}",
-        "authenticated_user": email
+        "message": f"Connection verified for {email}. Build: {commit_sha}",
+        "authenticated_user": email,
+        "commit_sha": commit_sha
     })
 
 
