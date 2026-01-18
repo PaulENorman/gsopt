@@ -64,6 +64,37 @@ function openSidebar() {
 }
 
 /**
+ * Opens the parallel coordinates visualization in a larger modeless dialog.
+ */
+function openParallelCoordinates() {
+  const html = HtmlService.createHtmlOutputFromFile('pcp')
+      .setWidth(1000)
+      .setHeight(700);
+  SpreadsheetApp.getUi().showModelessDialog(html, 'Parallel Coordinates Analysis');
+}
+
+/**
+ * Fetches data for the PCP visualization.
+ */
+function getPcpData() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const dataSheet = ss.getSheetByName(DATA_SHEET_NAME);
+  if (!dataSheet) return null;
+  
+  const lastRow = dataSheet.getLastRow();
+  if (lastRow < 1) return null;
+  
+  const values = dataSheet.getDataRange().getValues();
+  const headers = values[0];
+  const rows = values.slice(1).filter(row => row[headers.length - 1] !== '');
+  
+  return {
+    headers: headers,
+    rows: rows
+  };
+}
+
+/**
  * Provides the sidebar with initial structural settings from the sheet.
  * Optimizer-specific settings (Estimator, etc.) will use sidebar defaults.
  */
@@ -292,7 +323,7 @@ function updateAnalysisPlots() {
     .addRange(objectiveRange)
     .setOption('title', 'Objective vs. Iteration')
     .setOption('hAxis', { title: 'Iteration' })
-    .setOption('vAxis', { title: 'Objective', viewWindowMode: 'pretty' }) // Ensure scaling to objective values
+    .setOption('vAxis', { title: settings.objective_name, viewWindowMode: 'pretty' })
     .setOption('pointSize', 5)
     .setOption('lineWidth', 2)
     .setPosition(rowPos, colPos, 0, 0)
@@ -300,7 +331,7 @@ function updateAnalysisPlots() {
   analysisSheet.insertChart(progressChart);
   rowPos += 21;
 
-  // Parameter charts (One for each actual parameter name found in settings)
+  // Parameter charts - iterating over all parameters defined in settings
   settings.param_names.forEach((paramName, i) => {
     const paramRange = dataSheet.getRange(DATA_START_ROW, i + 2, numRows, 1);
     const chart = analysisSheet.newChart()
@@ -309,7 +340,7 @@ function updateAnalysisPlots() {
       .addRange(objectiveRange)
       .setOption('title', `${paramName} vs. Objective`)
       .setOption('hAxis', { title: paramName })
-      .setOption('vAxis', { title: 'Objective' })
+      .setOption('vAxis', { title: settings.objective_name, viewWindowMode: 'pretty' })
       .setOption('pointSize', 5)
       .setPosition(rowPos, colPos, 0, 0)
       .build();

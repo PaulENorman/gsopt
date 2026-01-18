@@ -76,7 +76,7 @@
         <h2 onclick="toggleSection('plots-section')"><span class="triangle"></span>Data Plots</h2>
         <div class="section-content">
             <button onclick="updatePlots()">Update Analysis Plots</button>
-            <button class="secondary" style="background: #ea4335;" onclick="deletePlots()">Delete All Plots</button>
+            <button class="secondary" onclick="openParallelCoords()">Parallel Coordinates</button>
         </div>
     </div>
 
@@ -159,15 +159,13 @@
         function updatePlots() {
             setLoading(true);
             google.script.run
-                .withSuccessHandler(r => { setLoading(false); showMessage({status: 'success', message: 'Plots updated.'}); })
+                .withSuccessHandler(() => { setLoading(false); showMessage({status: 'success', message: 'Plots updated.'}); })
                 .withFailureHandler(err => { setLoading(false); showMessage({status: 'error', message: err}); })
                 .updateAnalysisPlots();
         }
 
-        function deletePlots() {
-            if (!confirm('Are you sure you want to delete all charts on the Analysis tab?')) return;
-            google.script.run.deleteAnalysisPlots();
-            showMessage({status: 'success', message: 'Plots deleted.'});
+        function openParallelCoords() {
+            google.script.run.openParallelCoordinates();
         }
 
         function showMessage(response) {
