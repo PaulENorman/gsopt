@@ -36,14 +36,13 @@
                 line: {
                     showscale: true,
                     reversescale: true,
-                    colorscale: 'Viridis',
+                    colorscale: 'Rainbow',
                     color: data.rows.map(row => row[data.headers.length - 1]) // Color by the objective column
                 },
                 dimensions: dimensions
             };
 
             const layout = {
-                title: 'Parallel Coordinates Analysis',
                 margin: { t: 50, b: 20, l: 50, r: 50 }
             };
 

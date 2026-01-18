@@ -1,7 +1,7 @@
 const CLOUD_RUN_URL = 'https://gsopt-449559265504.europe-west1.run.app';
 const DATA_SHEET_NAME = 'Data';
 const SETTINGS_SHEET_NAME = 'Parameter Settings';
-const ANALYSIS_SHEET_NAME = 'Analysis';
+const ANALYSIS_SHEET_NAME = 'Main Effect Plots';
 const DATA_START_ROW = 2; // Writing to headers on Row 1, data starts Row 2
 const PARAM_CONFIG_START_ROW = 6; // Parameters start on Row 6
 const MAX_PARAM_ROWS = 500;
@@ -58,7 +58,7 @@ function onEdit(e) {
 
 function openSidebar() {
   const html = HtmlService.createHtmlOutputFromFile('sidebar')
-      .setTitle('Bayesian Optimizer')
+      .setTitle('GSOpt')
       .setWidth(300);
   SpreadsheetApp.getUi().showSidebar(html);
 }
@@ -85,8 +85,11 @@ function getPcpData() {
   if (lastRow < 1) return null;
   
   const values = dataSheet.getDataRange().getValues();
-  const headers = values[0];
-  const rows = values.slice(1).filter(row => row[headers.length - 1] !== '');
+  // Remove the 'Iteration' column (index 0) from headers and rows
+  const headers = values[0].slice(1);
+  const rows = values.slice(1)
+    .filter(row => row[row.length - 1] !== '')
+    .map(row => row.slice(1));
   
   return {
     headers: headers,
