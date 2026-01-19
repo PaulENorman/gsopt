@@ -1,55 +1,82 @@
 <!DOCTYPE html>
 <html>
-<head>
+  <head>
     <base target="_top">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://ssl.gstatic.com/docs/script/css/add-ons1.css">
     <style>
-        body { font-family: 'Roboto', sans-serif; padding: 16px; color: #202124; background-color: #ffffff; line-height: 1.5; }
-        .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
-        .logo-text { font-size: 1.5em; font-weight: 500; color: #1a73e8; margin: 0; }
-        .doc-link { font-size: 0.8em; color: #5f6368; text-decoration: none; border: 1px solid #dadce0; padding: 4px 8px; border-radius: 4px; }
-        .doc-link:hover { background-color: #f8f9fa; }
-        
-        h2 { font-size: 0.9em; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; color: #5f6368; margin-top: 24px; padding-bottom: 8px; border-bottom: 1px solid #e8eaed; cursor: pointer; display: flex; align-items: center; }
-        .triangle { display: inline-block; width: 0; height: 0; margin-right: 8px; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid #5f6368; transition: transform 0.2s; }
-        .collapsed .triangle { transform: rotate(-90deg); }
-        .section-content { padding-top: 12px; }
-        .collapsed .section-content { display: none; }
-        
-        .form-group { margin-bottom: 16px; }
-        label { display: block; font-weight: 500; margin-bottom: 6px; font-size: 0.85em; color: #3c4043; }
-        select, input { width: 100%; padding: 10px 12px; border: 1px solid #dadce0; border-radius: 4px; font-size: 0.9em; transition: border-color 0.2s; }
-        select:focus, input:focus { border-color: #1a73e8; outline: none; box-shadow: 0 0 0 2px rgba(26,115,232,0.2); }
-        
-        button { background: #1a73e8; color: #ffffff; border: none; padding: 10px 24px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: 500; font-size: 0.9em; margin-bottom: 12px; transition: background 0.2s, box-shadow 0.2s; box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15); }
-        button:hover { background: #1765cc; box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15); }
-        button:active { background: #1669bb; }
-        button:disabled { background: #e8eaed; color: #9aa0a6; cursor: not-allowed; box-shadow: none; }
-        
-        button.secondary { background: #ffffff; color: #1a73e8; border: 1px solid #dadce0; box-shadow: none; }
-        button.secondary:hover { background: #f8f9fa; border-color: #d2e3fc; }
-        
-        #message { margin-top: 20px; padding: 12px; border-radius: 8px; font-size: 0.85em; display: none; }
-        .footer { margin-top: 32px; text-align: center; font-size: 0.75em; color: #70757a; border-top: 1px solid #e8eaed; padding-top: 16px; }
-        .footer a { color: #1a73e8; text-decoration: none; }
+      body { font-family: 'Roboto', sans-serif; padding: 16px; color: #202124; background-color: #ffffff; line-height: 1.5; }
+      .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+      .logo-text { font-size: 1.5em; font-weight: 500; color: #1a73e8; margin: 0; }
+      .doc-link { font-size: 0.8em; color: #5f6368; text-decoration: none; border: 1px solid #dadce0; padding: 4px 8px; border-radius: 4px; }
+      .doc-link:hover { background-color: #f8f9fa; }
+      
+      h2 { font-size: 0.9em; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; color: #5f6368; margin-top: 24px; padding-bottom: 8px; border-bottom: 1px solid #e8eaed; cursor: pointer; display: flex; align-items: center; }
+      .triangle { display: inline-block; width: 0; height: 0; margin-right: 8px; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid #5f6368; transition: transform 0.2s; }
+      .collapsed .triangle { transform: rotate(-90deg); }
+      .section-content { padding-top: 12px; }
+      .collapsed .section-content { display: none; }
+      
+      .form-group { margin-bottom: 16px; }
+      label { display: block; font-weight: 500; margin-bottom: 6px; font-size: 0.85em; color: #3c4043; }
+      select, input { width: 100%; padding: 10px 12px; border: 1px solid #dadce0; border-radius: 4px; font-size: 0.9em; transition: border-color 0.2s; }
+      select:focus, input:focus { border-color: #1a73e8; outline: none; box-shadow: 0 0 0 2px rgba(26,115,232,0.2); }
+      
+      button { background: #1a73e8; color: #ffffff; border: none; padding: 10px 24px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: 500; font-size: 0.9em; margin-bottom: 12px; transition: background 0.2s, box-shadow 0.2s; box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15); }
+      button:hover { background: #1765cc; box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15); }
+      button:active { background: #1669bb; }
+      button:disabled { background: #e8eaed; color: #9aa0a6; cursor: not-allowed; box-shadow: none; }
+      
+      button.secondary { background: #ffffff; color: #1a73e8; border: 1px solid #dadce0; box-shadow: none; }
+      button.secondary:hover { background: #f8f9fa; border-color: #d2e3fc; }
+      
+      #message { margin-top: 20px; padding: 12px; border-radius: 8px; font-size: 0.85em; display: none; }
+      .footer { margin-top: 32px; text-align: center; font-size: 0.75em; color: #70757a; border-top: 1px solid #e8eaed; padding-top: 16px; }
+      .footer a { color: #1a73e8; text-decoration: none; }
 
-        .info-icon {
-            display: inline-block;
-            width: 14px;
-            height: 14px;
-            background: #e8eaed;
-            color: #5f6368;
-            border-radius: 50%;
-            text-align: center;
-            line-height: 14px;
-            font-size: 10px;
-            margin-left: 5px;
-            cursor: help;
-            vertical-align: middle;
-        }
+      .info-icon {
+          display: inline-block;
+          width: 14px;
+          height: 14px;
+          background: #e8eaed;
+          color: #5f6368;
+          border-radius: 50%;
+          text-align: center;
+          line-height: 14px;
+          font-size: 10px;
+          margin-left: 5px;
+          cursor: help;
+          vertical-align: middle;
+      }
+
+      .branding-below {
+        bottom: 56px;
+        top: 0;
+      }
+      .block {
+        padding: 10px;
+      }
+      button {
+        width: 100%;
+        margin-bottom: 10px;
+      }
+      #status {
+        margin-top: 10px;
+        font-size: 0.9em;
+        color: #666;
+        padding: 5px;
+        border: 1px solid #eee;
+        background: #f9f9f9;
+        min-height: 20px;
+      }
+      .error {
+        color: red;
+      }
+      .success {
+        color: green;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="header-row">
         <h1 class="logo-text">GSOpt</h1>
         <a href="https://paulnorman.cc/gsopt/" target="_blank" class="doc-link" title="Open the full documentation">Docs</a>
@@ -250,6 +277,48 @@
                 messageDiv.style.border = '1px solid #a4cafe';
             }
         }
+
+        function setStatus(msg, type) {
+          var div = document.getElementById('status');
+          div.innerText = msg;
+          div.className = type || '';
+        }
+
+        function runTestConnection() {
+          setStatus("Testing connection...");
+          google.script.run
+            .withSuccessHandler(function(response) {
+              setStatus("Connection OK: " + response, 'success');
+            })
+            .withFailureHandler(function(err) {
+              setStatus("Error: " + err.message, 'error');
+            })
+            .handleTestConnection();
+        }
+
+        function runInitialize() {
+          setStatus("Initializing...");
+          google.script.run
+            .withSuccessHandler(function(response) {
+              setStatus(response, 'success');
+            })
+            .withFailureHandler(function(err) {
+              setStatus("Error: " + err.message, 'error');
+            })
+            .handleInitializeOptimization();
+        }
+
+        function runContinue() {
+          setStatus("Processing...");
+          google.script.run
+            .withSuccessHandler(function(response) {
+              setStatus(response, 'success');
+            })
+            .withFailureHandler(function(err) {
+              setStatus("Error: " + err.message, 'error');
+            })
+            .handleContinueOptimization();
+        }
     </script>
-</body>
+  </body>
 </html>

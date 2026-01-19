@@ -26,6 +26,14 @@ function showSidebar() {
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
+/**
+ * Include function to allow splitting HTML into multiple files if needed (not strictly used here but good practice).
+ */
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename)
+      .getContent();
+}
+
 function getInitialSettings() {
   return readOptimizerSettings();
 }

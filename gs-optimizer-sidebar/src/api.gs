@@ -1,3 +1,4 @@
+
 /**
  * Logic for calling the optimizer API.
  */
@@ -14,6 +15,7 @@ function callOptimizerApi(endpoint, payload) {
     throw new Error(response.getContentText());
   }
   return JSON.parse(response.getContentText());
+
 }
 
 function initOptimization() {
