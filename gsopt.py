@@ -269,8 +269,14 @@ def generate_plot() -> Tuple[Any, int]:
     try:
         data = request.get_json()
         plot_type = data.get('plot_type', 'convergence')
-        settings = OptimizerSettings.from_dict(data.get('settings', {}))
+        raw_settings = data.get('settings', {})
+        settings = OptimizerSettings.from_dict(raw_settings)
         existing_data = data.get('existing_data', [])
+        
+        # Check optimization mode for plot labeling
+        opt_mode = raw_settings.get('optimization_mode', 'Minimize')
+        is_max = opt_mode == 'Maximize'
+        suffix = " (-Objective)" if is_max else ""
 
         optimizer_wrapper = build_optimizer(settings, existing_data)
         
@@ -304,15 +310,15 @@ def generate_plot() -> Tuple[Any, int]:
         try:
             if plot_type == 'convergence':
                 plot_convergence(res)
-                plt.title("Convergence Plot")
+                plt.title(f"Convergence Plot{suffix}")
             elif plot_type == 'evaluations':
                 plot_evaluations(res, bins=10)
-                plt.suptitle("Evaluations Matrix", fontsize=16)
+                plt.suptitle(f"Evaluations Matrix{suffix}", fontsize=16)
             elif plot_type == 'objective':
                 # plot_objective requires the models to be fitted.
                 # Since we called tell() in build_optimizer, the last model in res.models should be valid.
                 plot_objective(res, size=3) 
-                plt.suptitle("Objective Partial Dependence", fontsize=16)
+                plt.suptitle(f"Objective Partial Dependence{suffix}", fontsize=16)
         except Exception as plot_err:
              logger.error(f"Specific plotting error: {plot_err}")
              return jsonify({"status": "error", "message": f"Error creating {plot_type}: {str(plot_err)}"}), 500
