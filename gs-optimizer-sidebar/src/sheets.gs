@@ -16,12 +16,6 @@ function onOpen() {
     const ui = SpreadsheetApp.getUi();
     ui.createMenu('GSOpt')
         .addItem('Open Sidebar', 'openSidebar')
-        .addItem('Test Connection', 'testConnectionUI')
-        .addSeparator()
-        .addItem('Convergence Plot', 'openConvergencePlot')
-        .addItem('Evaluations Plot', 'openEvaluationsPlot')
-        .addItem('Objective Plot', 'openObjectivePlot')
-        .addItem('Parallel Coordinates', 'openParallelCoordinates')
         .addToUi();
   } catch (e) {
     // Log any errors - check View > Logs in Apps Script editor
