@@ -7,20 +7,6 @@
  * data reading/writing, and communication with the optimizer API.
  */
 
-const CLOUD_RUN_URL = 'https://gsopt-449559265504.europe-west1.run.app';
-const DATA_SHEET_NAME = 'Data';
-const SETTINGS_SHEET_NAME = 'Optimizer Settings';
-const ANALYSIS_SHEET_NAME = 'Analysis';
-const DATA_START_ROW = 4;
-const PARAM_CONFIG_START_ROW = 13; // Changed from 9
-const MAX_PARAM_ROWS = 500;
-
-// New constants for settings cells
-const NUM_PARAMS_CELL = 'B11';
-const OBJECTIVE_NAME_CELL = 'B8';
-const OPTIMIZATION_MODE_CELL = 'B9';
-
-
 function onOpen() {
   /**
    * Creates custom menu when spreadsheet opens.

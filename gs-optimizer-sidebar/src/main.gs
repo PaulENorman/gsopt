@@ -1,20 +1,28 @@
 /**
- * Creates a custom menu in Google Sheets when the spreadsheet opens.
+ * Main entry point for the GSOpt application.
+ * Consolidates menu creation logic to avoid dependency on external macros.
  */
 function onOpen() {
   SpreadsheetApp.getUi()
-      .createMenu('Bayesian Optimization')
-      .addItem('Open Sidebar', 'showSidebar')
-      .addToUi();
+    .createMenu('GSOpt')
+    .addItem('Open Optimizer Sidebar', 'showSidebar')
+    .addToUi();
 }
 
 /**
- * Opens a sidebar in the document containing the add-on's user interface.
+ * Ensures the menu appears immediately after installation without needing a refresh.
+ */
+function onInstall(e) {
+  onOpen(e);
+}
+
+/**
+ * Loads the sidebar HTML from the sidebar.html file.
  */
 function showSidebar() {
-  var html = HtmlService.createHtmlOutputFromFile('sidebar')
-      .setTitle('Bayesian Optimization')
-      .setWidth(300);
+  const html = HtmlService.createHtmlOutputFromFile('sidebar')
+    .setTitle('GSOpt: Bayesian Optimization')
+    .setWidth(300);
   SpreadsheetApp.getUi().showSidebar(html);
 }
 

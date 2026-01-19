@@ -1,23 +1,3 @@
-const CLOUD_RUN_URL = 'https://gsopt-449559265504.europe-west1.run.app';
-const DATA_SHEET_NAME = 'Data';
-const SETTINGS_SHEET_NAME = 'Parameter Settings';
-const ANALYSIS_SHEET_NAME = 'Main Effect Plots';
-const DATA_START_ROW = 2; // Writing to headers on Row 1, data starts Row 2
-const PARAM_CONFIG_START_ROW = 7; // Parameters start on Row 7
-const MAX_PARAM_ROWS = 500;
-
-const OBJECTIVE_NAME_CELL = 'B2';
-const NUM_PARAMS_CELL = 'B5';
-
-const COLORS = {
-  ITER_HEADER: '#cccccc', // Grey
-  ITER_DATA: '#f3f3f3',   // Light Grey
-  PARAM_HEADER: '#a4c2f4', // Medium Blue
-  PARAM_DATA: '#cfe2f3',   // Light Blue
-  OBJ_HEADER: '#b6d7a8',   // Medium Green
-  OBJ_DATA: '#d9ead3'      // Light Green
-};
-
 /**
  * Extracts content within parentheses, e.g., "Gaussian Process (GP)" -> "GP".
  */
@@ -27,11 +7,43 @@ function parseParens(str) {
   return match ? match[1] : str;
 }
 
+/**
+ * Creates the custom menu when the spreadsheet is opened.
+ * This function is automatically triggered by Google Sheets.
+ */
 function onOpen() {
-  SpreadsheetApp.getUi()
-      .createMenu('GSOpt')
-      .addItem('Open Sidebar', 'openSidebar')
-      .addToUi();
+  try {
+    const ui = SpreadsheetApp.getUi();
+    ui.createMenu('GSOpt')
+        .addItem('Open Sidebar', 'openSidebar')
+        .addItem('Test Connection', 'testConnectionUI')
+        .addSeparator()
+        .addItem('Convergence Plot', 'openConvergencePlot')
+        .addItem('Evaluations Plot', 'openEvaluationsPlot')
+        .addItem('Objective Plot', 'openObjectivePlot')
+        .addItem('Parallel Coordinates', 'openParallelCoordinates')
+        .addToUi();
+  } catch (e) {
+    // Log any errors - check View > Logs in Apps Script editor
+    Logger.log('Error creating menu: ' + e.toString());
+  }
+}
+
+/**
+ * Manual function to create the menu - use this for testing.
+ * Run this from the Apps Script editor if the menu doesn't appear.
+ */
+function createMenuManually() {
+  onOpen();
+  SpreadsheetApp.getUi().alert('Menu created! Check the menu bar for "GSOpt"');
+}
+
+/**
+ * UI wrapper for connection test
+ */
+function testConnectionUI() {
+  const result = testCloudRunConnection();
+  SpreadsheetApp.getUi().alert(result.status + ': ' + result.message);
 }
 
 /**
@@ -154,6 +166,18 @@ function getPlotData(plotType) {
       .filter(d => d.objective !== '' && d.objective !== null);
   }
 
+  // Handle Maximization: Negate objective if needed
+  const settingsSheet = ss.getSheetByName(SETTINGS_SHEET_NAME);
+  const optimizationMode = settingsSheet.getRange(OPTIMIZATION_MODE_CELL).getValue();
+  if (optimizationMode === 'Maximize') {
+    existingData.forEach(point => {
+      // Create copy to be safe, though not strictly necessary here
+      point.objective = -1 * parseFloat(point.objective); 
+    });
+    // Pass mode to backend for better labeling
+    settings.optimization_mode = 'Maximize';
+  }
+
   if (existingData.length === 0) {
     throw new Error("No evaluated data available to plot. Please run optimization first.");
   }
@@ -225,24 +249,46 @@ function getPcpData() {
 }
 
 /**
- * Provides the sidebar with initial structural settings from the sheet.
- * Optimizer-specific settings (Estimator, etc.) will use sidebar defaults.
+ * Interface between the sidebar UI and the Sheet/API logic.
  */
+
 function getInitialSettings() {
-  const sheetConfig = readOptimizerSettings();
   return {
-    objective_name: sheetConfig.objective_name,
-    num_params: sheetConfig.num_params
-    // Note: sidebar defaults for GP, EI, etc. will take over from here
+    base_estimator: 'GP',
+    acquisition_function: 'EI',
+    num_params: 2,
+    optimization_mode: 'Minimize'
   };
 }
 
-function ask_for_init_points(settings) {
-  return { status: 'success', message: suggestNextPoints(settings, true) };
-}
+function testCloudRunConnection() {
+  try {
+    const userEmail = Session.getActiveUser().getEmail();
+    const options = {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({}),
+      headers: {
+        'X-User-Email': userEmail,
+        'Authorization': 'Bearer ' + ScriptApp.getIdentityToken()
+      },
+      muteHttpExceptions: true
+    };
 
-function tell_ask(settings) {
-  return { status: 'success', message: suggestNextPoints(settings, false) };
+    const response = UrlFetchApp.fetch(CLOUD_RUN_URL + '/test-connection', options);
+    const code = response.getResponseCode();
+    const text = response.getContentText();
+    
+    if (code === 200) {
+      let msg = text;
+      try { msg = JSON.parse(text).message; } catch(e) {}
+      return { status: 'success', message: msg };
+    } else {
+      return { status: 'error', message: 'Error (' + code + '): ' + text };
+    }
+  } catch (e) {
+    return { status: 'error', message: e.toString() };
+  }
 }
 
 /**
@@ -520,124 +566,5 @@ function deleteAnalysisPlots() {
   const charts = analysisSheet.getCharts();
   for (let i = 0; i < charts.length; i++) {
     analysisSheet.removeChart(charts[i]);
-  }
-}
-
-function testCloudRunConnection() {
-  const userEmail = Session.getActiveUser().getEmail();
-  try {
-    const options = {
-      method: 'post',
-      contentType: 'application/json',
-      muteHttpExceptions: true,
-      headers: {
-        'X-User-Email': userEmail,
-        'Authorization': 'Bearer ' + ScriptApp.getIdentityToken()
-      },
-      payload: JSON.stringify({})
-    };
-    
-    const response = UrlFetchApp.fetch(`${CLOUD_RUN_URL}/test-connection`, options);
-    const code = response.getResponseCode();
-    const content = response.getContentText();
-    
-    if (code === 200) {
-       return { status: 'success', message: 'Connected: ' + content };
-    } else {
-       return { status: 'error', message: `Server returned ${code}: ${content}` };
-    }
-  } catch (e) {
-    return { status: 'error', message: 'Connection failed: ' + e.toString() };
-  }
-}
-
-/**
- * Wrapper function called by the sidebar to test connection.
- */
-function handleTestConnection() {
-  return testConnection();
-}
-
-/**
- * Reads data from the active sheet and sends it to the optimization API.
- * This is a simplified example assuming headers are in row 1 and data follows.
- */
-function handleInitializeOptimization() {
-  const sheet = SpreadsheetApp.getActiveSheet();
-  const dataRange = sheet.getDataRange();
-  const values = dataRange.getValues();
-  
-  if (values.length < 2) {
-    throw new Error("Sheet must contain headers and at least one row of data/config.");
-  }
-
-  // Construct payload based on sheet data structure expected by backend
-  const payload = {
-    headers: values[0],
-    data: values.slice(1),
-    // Add configuration parameters if stored in specific cells or properties
-  };
-
-  try {
-    const result = initializeOptimization(payload);
-    
-    // Process result: e.g., write suggestions to sheet
-    if (result && result.next_points) {
-        appendResultsToSheet(sheet, result.next_points);
-        return "Optimization initialized. Next points added.";
-    }
-    return "Optimization initialized successfully.";
-  } catch (e) {
-    throw e.message;
-  }
-}
-
-/**
- * Wrapper for continuing optimization.
- */
-function handleContinueOptimization() {
-  const sheet = SpreadsheetApp.getActiveSheet();
-  const dataRange = sheet.getDataRange();
-  const values = dataRange.getValues();
-  
-  const payload = {
-    headers: values[0],
-    data: values.slice(1),
-    is_continuation: true
-  };
-
-  try {
-    const result = continueOptimization(payload);
-     if (result && result.next_points) {
-        appendResultsToSheet(sheet, result.next_points);
-        return "Optimization continued. New points added.";
-    }
-    return "Optimization step complete.";
-  } catch (e) {
-    throw e.message;
-  }
-}
-
-/**
- * Helper to append new recommended points to the sheet.
- */
-function appendResultsToSheet(sheet, points) {
-  // points is assumed to be an array of arrays or objects
-  // appropriate transformation needed based on API response structure
-  if (Array.isArray(points) && points.length > 0) {
-      // Check if it's array of objects or array of arrays
-      let rowsToAdd = points;
-      if (!Array.isArray(points[0])) {
-          // Convert objects to array based on headers if necessary, 
-          // here we assume simple array of arrays for simplicity
-          rowsToAdd = points.map(p => Object.values(p));
-      }
-      
-      const lastRow = sheet.getLastRow();
-      const startRow = lastRow + 1;
-      const numRows = rowsToAdd.length;
-      const numCols = rowsToAdd[0].length;
-      
-      sheet.getRange(startRow, 1, numRows, numCols).setValues(rowsToAdd);
   }
 }

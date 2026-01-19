@@ -1,78 +1,31 @@
-// Replace with your actual Cloud Run Service URL
-const CLOUD_RUN_URL = 'https://your-cloud-run-service-url.run.app';
 
 /**
- * Calls the /test endpoint of the Cloud Run service.
+ * Logic for calling the optimizer API.
  */
-function testConnection() {
-  try {
-    const response = UrlFetchApp.fetch(CLOUD_RUN_URL + '/test', {
-      'method': 'get',
-      'muteHttpExceptions': true
-    });
-    return response.getContentText();
-  } catch (e) {
-    return 'Error: ' + e.toString();
-  }
-}
-
-/**
- * Calls the /optimize endpoint to initialize optimization.
- * @param {Object} payload Data from the sheet.
- */
-function initializeOptimization(payload) {
-  return callEndpoint('/optimize', payload);
-}
-
-/**
- * Calls the /optimize endpoint to continue optimization (append new points).
- * @param {Object} payload Data from the sheet including new points.
- */
-function continueOptimization(payload) {
-    // Assuming backend handles initialization vs continuation based on payload content or a flag
-    // Often continuation uses the same endpoint but with different parameters
-  return callEndpoint('/optimize', payload); 
-}
-
-/**
- * Helper function to make POST requests.
- */
-function callEndpoint(endpoint, payload) {
+function callOptimizerApi(endpoint, payload) {
   const options = {
-    'method': 'post',
-    'contentType': 'application/json',
-    'payload': JSON.stringify(payload),
-    'muteHttpExceptions': true
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
   };
   
-  try {
-    const response = UrlFetchApp.fetch(CLOUD_RUN_URL + endpoint, options);
-    const responseCode = response.getResponseCode();
-    const content = response.getContentText();
-    
-    if (responseCode >= 200 && responseCode < 300) {
-      // Parse JSON response if possible
-      try {
-        return JSON.parse(content);
-      } catch (e) {
-        return { message: content };
-      }
-    } else {
-      throw new Error(`Server returned code ${responseCode}: ${content}`);
-    }
-  } catch (e) {
-    throw new Error('API Call Failed: ' + e.message);
+  const response = UrlFetchApp.fetch(CLOUD_RUN_URL + endpoint, options);
+  if (response.getResponseCode() !== 200) {
+    throw new Error(response.getContentText());
   }
+  return JSON.parse(response.getContentText());
+
 }
 
 function initOptimization() {
   const settings = readOptimizerSettings();
-  return callCloudRunEndpoint('/init-optimization', { settings: settings });
+  return callOptimizerApi('/init-optimization', { settings: settings });
 }
 
 function continueOptimization(existingData) {
   const settings = readOptimizerSettings();
-  return callCloudRunEndpoint('/continue-optimization', { settings: settings, existing_data: existingData });
+  return callOptimizerApi('/continue-optimization', { settings: settings, existing_data: existingData });
 }
 
 function callCloudRunEndpoint(endpoint, payload, progressMessage) {
@@ -166,7 +119,26 @@ function ask_for_init_points(sidebarSettings) {
   }
   
   const dataSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DATA_SHEET_NAME);
-  const settings = readOptimizerSettings();
+  const sheetInfo = readOptimizerSettings();
+  
+  // Merge sheet config (params) with sidebar config (algorithm settings)
+  const settings = { ...sheetInfo };
+  
+  if (sidebarSettings) {
+    Object.assign(settings, sidebarSettings);
+    // Format estimator name for Python backend (e.g., "Gaussian Process (GP)" -> "SKOPT-GP")
+    if (sidebarSettings.base_estimator) {
+      settings.base_estimator = 'SKOPT-' + parseParens(sidebarSettings.base_estimator);
+    }
+    if (sidebarSettings.acquisition_function) {
+      settings.acquisition_function = parseParens(sidebarSettings.acquisition_function);
+    }
+  } else {
+    // Fallback defaults
+    settings.base_estimator = 'SKOPT-GP';
+    settings.acquisition_function = 'EI';
+    settings.num_init_points = 10;
+  }
   
   if (settings.num_params === 0) {
     return { status: 'error', message: 'Please configure parameters first' };
@@ -179,7 +151,7 @@ function ask_for_init_points(sidebarSettings) {
     if (lastRow >= DATA_START_ROW) {
       dataSheet.getRange(DATA_START_ROW, 1, lastRow - DATA_START_ROW + 1, dataSheet.getMaxColumns()).clearContent();
     }
-    _writePointsToSheet(dataSheet, response.data, settings, DATA_START_ROW, 1);
+    writePointsToSheet(dataSheet, response.data, settings, DATA_START_ROW, 1);
     return { status: 'success', message: `Initialized with ${response.data.length} points` };
   }
   
@@ -192,24 +164,46 @@ function tell_ask(sidebarSettings) {
   }
 
   const dataSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DATA_SHEET_NAME);
-  const settings = readOptimizerSettings();
+  const sheetInfo = readOptimizerSettings();
+  
+  const settings = { ...sheetInfo };
+  if (sidebarSettings) {
+    Object.assign(settings, sidebarSettings);
+    if (sidebarSettings.base_estimator) {
+      settings.base_estimator = 'SKOPT-' + parseParens(sidebarSettings.base_estimator);
+    }
+    if (sidebarSettings.acquisition_function) {
+      settings.acquisition_function = parseParens(sidebarSettings.acquisition_function);
+    }
+  } else {
+    settings.base_estimator = 'SKOPT-GP';
+    settings.acquisition_function = 'EI';
+    settings.batch_size = 5;
+  }
   
   const lastRow = dataSheet.getLastRow();
   if (lastRow < DATA_START_ROW) {
     return { status: 'error', message: 'No data found. Initialize first.' };
   }
   
-  const existingData = _readDataFromSheet(dataSheet, settings, DATA_START_ROW, lastRow);
+  const existingData = readDataFromSheet(dataSheet, settings, DATA_START_ROW, lastRow);
   const validPointsCount = existingData.filter(point => point.objective !== '' && point.objective !== null).length;
   
   if (validPointsCount === 0) {
     return { status: 'error', message: 'No objective values found in the Data sheet.' };
   }
   
-  // Handing maximization
-  const settingsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SETTINGS_SHEET_NAME);
-  const optimizationMode = settingsSheet.getRange(OPTIMIZATION_MODE_CELL).getValue();
-  if (optimizationMode === 'Maximize') {
+  // Handing maximization. Prioritize sidebar setting if available, else check sheet.
+  let isMaximization = false;
+  if (sidebarSettings && sidebarSettings.optimization_mode) {
+    isMaximization = (sidebarSettings.optimization_mode === 'Maximize');
+  } else {
+    const settingsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SETTINGS_SHEET_NAME);
+    const mode = settingsSheet.getRange(OPTIMIZATION_MODE_CELL).getValue();
+    isMaximization = (mode === 'Maximize');
+  }
+
+  if (isMaximization) {
     existingData.forEach(point => {
       if (point.objective !== '' && point.objective !== null) {
         point.objective = -1 * parseFloat(point.objective);
@@ -221,7 +215,7 @@ function tell_ask(sidebarSettings) {
   
   if (response && response.status === 'success' && response.data) {
     const nextIteration = (lastRow - DATA_START_ROW + 1) + 1;
-    _writePointsToSheet(dataSheet, response.data, settings, lastRow + 1, nextIteration);
+    writePointsToSheet(dataSheet, response.data, settings, lastRow + 1, nextIteration);
     return { status: 'success', message: `Added ${response.data.length} new points` };
   }
   
