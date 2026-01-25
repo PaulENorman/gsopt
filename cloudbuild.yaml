@@ -1,49 +1,51 @@
 steps:
-  # Debug step to verify substitution variables
-  - name: 'gcr.io/cloud-builders/gcloud'
+  # Get the short commit SHA
+  - name: 'gcr.io/cloud-builders/git'
+    id: 'get-commit-sha'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - 'git rev-parse --short HEAD | tee /workspace/commit_sha.txt'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-image'
     entrypoint: 'bash'
     args:
       - '-c'
       - |
-        echo "COMMIT_SHA: $COMMIT_SHA"
-        echo "SHORT_SHA: $SHORT_SHA"
-        echo "PROJECT_ID: $PROJECT_ID"
+        COMMIT_SHA=$$(cat /workspace/commit_sha.txt)
+        echo "Building with commit SHA: $$COMMIT_SHA"
+        docker build \
+          --build-arg COMMIT_SHA=$$COMMIT_SHA \
+          -t gcr.io/$PROJECT_ID/gsopt:$$COMMIT_SHA \
+          -t gcr.io/$PROJECT_ID/gsopt:latest \
+          .
 
-  - name: 'gcr.io/cloud-builders/git'
-    args: ['rev-parse', '--short', 'HEAD']
-    id: 'get-commit-sha'
-    env:
-      - 'SHORT_SHA_FILE=/workspace/short_sha.txt'
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-tagged'
     entrypoint: 'bash'
     args:
       - '-c'
-      - 'git rev-parse --short HEAD > /workspace/short_sha.txt'
+      - |
+        COMMIT_SHA=$$(cat /workspace/commit_sha.txt)
+        docker push gcr.io/$PROJECT_ID/gsopt:$$COMMIT_SHA
 
   - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - 'build'
-      - '--build-arg'
-      - 'COMMIT_SHA=$(cat /workspace/short_sha.txt)'
-      - '-t'
-      - 'gcr.io/$PROJECT_ID/gsopt:latest'
-      - '.'
-
-  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-latest'
     args: ['push', 'gcr.io/$PROJECT_ID/gsopt:latest']
 
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: gcloud
+    id: 'deploy-to-cloud-run'
+    entrypoint: 'bash'
     args:
-      - 'run'
-      - 'deploy'
-      - 'gsopt'
-      - '--image'
-      - 'gcr.io/$PROJECT_ID/gsopt:latest'
-      - '--region'
-      - 'europe-west1'
-      - '--platform'
-      - 'managed'
-      - '--allow-unauthenticated'
+      - '-c'
+      - |
+        COMMIT_SHA=$$(cat /workspace/commit_sha.txt)
+        gcloud run deploy gsopt \
+          --image gcr.io/$PROJECT_ID/gsopt:$$COMMIT_SHA \
+          --region europe-west1 \
+          --platform managed \
+          --allow-unauthenticated
 
 images:
   - 'gcr.io/$PROJECT_ID/gsopt:latest'

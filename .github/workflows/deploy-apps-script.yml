@@ -1,0 +1,28 @@
+name: Deploy to Google Apps Script
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Install clasp
+      run: npm install -g @google/clasp
+    
+    - name: Write CLASPRC_JSON secret to file
+      run: echo "$CLASPRC_JSON_SECRET" >> ~/.clasprc.json
+      env:
+        CLASPRC_JSON_SECRET: ${{ secrets.CLASPRC_JSON }}
+    
+    - name: Push to Apps Script
+      run: clasp push
