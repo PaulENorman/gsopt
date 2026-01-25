@@ -29,9 +29,9 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Build Argument for Versioning
-ARG COMMIT_SHA=unknown
-ENV COMMIT_SHA=${COMMIT_SHA}
+# Build Argument for Versioning - remove default to make it required
+ARG COMMIT_SHA
+ENV COMMIT_SHA=${COMMIT_SHA:-development}
 
 # Copy the virtual environment from the builder stage
 COPY --from=builder /opt/venv /opt/venv
