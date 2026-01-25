@@ -1,17 +1,32 @@
 steps:
+  # Debug step to verify substitution variables
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "COMMIT_SHA: $COMMIT_SHA"
+        echo "SHORT_SHA: $SHORT_SHA"
+        echo "PROJECT_ID: $PROJECT_ID"
+
+  - name: 'gcr.io/cloud-builders/git'
+    args: ['rev-parse', '--short', 'HEAD']
+    id: 'get-commit-sha'
+    env:
+      - 'SHORT_SHA_FILE=/workspace/short_sha.txt'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - 'git rev-parse --short HEAD > /workspace/short_sha.txt'
+
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
       - '--build-arg'
-      - 'COMMIT_SHA=$COMMIT_SHA'
-      - '-t'
-      - 'gcr.io/$PROJECT_ID/gsopt:$COMMIT_SHA'
+      - 'COMMIT_SHA=$(cat /workspace/short_sha.txt)'
       - '-t'
       - 'gcr.io/$PROJECT_ID/gsopt:latest'
       - '.'
-
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/gsopt:$COMMIT_SHA']
 
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'gcr.io/$PROJECT_ID/gsopt:latest']
@@ -23,7 +38,7 @@ steps:
       - 'deploy'
       - 'gsopt'
       - '--image'
-      - 'gcr.io/$PROJECT_ID/gsopt:$COMMIT_SHA'
+      - 'gcr.io/$PROJECT_ID/gsopt:latest'
       - '--region'
       - 'europe-west1'
       - '--platform'
@@ -31,7 +46,6 @@ steps:
       - '--allow-unauthenticated'
 
 images:
-  - 'gcr.io/$PROJECT_ID/gsopt:$COMMIT_SHA'
   - 'gcr.io/$PROJECT_ID/gsopt:latest'
 
 options:
