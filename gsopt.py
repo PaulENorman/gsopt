@@ -23,19 +23,47 @@ import os
 import jwt
 import numpy as np
 from flask import Flask, request, jsonify
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from skopt.plots import plot_convergence, plot_evaluations, plot_objective
-from scipy.optimize import OptimizeResult
-import io
-import base64
 
 from utils import setup_logging, authenticate_request
-from skopt_bayes import build_optimizer as build_skopt_optimizer
 
 logger = setup_logging(__name__)
 app = Flask(__name__)
+
+# Lazy loading variables
+_matplotlib_loaded = False
+_skopt_plots_loaded = False
+_optimizer_builder_loaded = False
+
+def _ensure_matplotlib():
+    """Lazy load matplotlib only when plotting is needed."""
+    global _matplotlib_loaded
+    if not _matplotlib_loaded:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        globals()['matplotlib'] = matplotlib
+        globals()['plt'] = plt
+        _matplotlib_loaded = True
+
+def _ensure_skopt_plots():
+    """Lazy load skopt plotting functions only when needed."""
+    global _skopt_plots_loaded
+    if not _skopt_plots_loaded:
+        from skopt.plots import plot_convergence, plot_evaluations, plot_objective
+        from scipy.optimize import OptimizeResult
+        globals()['plot_convergence'] = plot_convergence
+        globals()['plot_evaluations'] = plot_evaluations
+        globals()['plot_objective'] = plot_objective
+        globals()['OptimizeResult'] = OptimizeResult
+        _skopt_plots_loaded = True
+
+def _ensure_optimizer_builder():
+    """Lazy load optimizer building functions only when needed."""
+    global _optimizer_builder_loaded
+    if not _optimizer_builder_loaded:
+        from skopt_bayes import build_optimizer as build_skopt_optimizer
+        globals()['build_skopt_optimizer'] = build_skopt_optimizer
+        _optimizer_builder_loaded = True
 
 
 @dataclass
@@ -92,6 +120,9 @@ def build_optimizer(settings: OptimizerSettings, existing_data: Optional[List[Di
     It then initializes the optimizer with the given settings and, if provided,
     trains it on existing data.
     """
+    # Lazy load optimizer builder only when needed
+    _ensure_optimizer_builder()
+    
     optimizer_type = settings.base_estimator
     
     logger.info(f"Building optimizer: {optimizer_type}")
@@ -267,6 +298,12 @@ def generate_plot() -> Tuple[Any, int]:
         return jsonify({"status": "error", "message": error_msg}), 403
 
     try:
+        # Lazy load plotting libraries only when needed
+        _ensure_matplotlib()
+        _ensure_skopt_plots()
+        import io
+        import base64
+        
         data = request.get_json()
         plot_type = data.get('plot_type', 'convergence')
         raw_settings = data.get('settings', {})
