@@ -17,8 +17,8 @@ steps:
         echo "Building with commit SHA: $$COMMIT_SHA"
         docker build \
           --build-arg COMMIT_SHA=$$COMMIT_SHA \
-          -t gcr.io/$PROJECT_ID/gsopt:$$COMMIT_SHA \
-          -t gcr.io/$PROJECT_ID/gsopt:latest \
+          -t europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/gsopt/gsopt:$$COMMIT_SHA \
+          -t europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/gsopt/gsopt:latest \
           .
 
   - name: 'gcr.io/cloud-builders/docker'
@@ -28,11 +28,11 @@ steps:
       - '-c'
       - |
         COMMIT_SHA=$$(cat /workspace/commit_sha.txt)
-        docker push gcr.io/$PROJECT_ID/gsopt:$$COMMIT_SHA
+        docker push europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/gsopt/gsopt:$$COMMIT_SHA
 
   - name: 'gcr.io/cloud-builders/docker'
     id: 'push-latest'
-    args: ['push', 'gcr.io/$PROJECT_ID/gsopt:latest']
+    args: ['push', 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/gsopt/gsopt:latest']
 
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'deploy-to-cloud-run'
@@ -42,13 +42,13 @@ steps:
       - |
         COMMIT_SHA=$$(cat /workspace/commit_sha.txt)
         gcloud run deploy gsopt \
-          --image gcr.io/$PROJECT_ID/gsopt:$$COMMIT_SHA \
+          --image europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/gsopt/gsopt:$$COMMIT_SHA \
           --region europe-west1 \
           --platform managed \
           --allow-unauthenticated
 
 images:
-  - 'gcr.io/$PROJECT_ID/gsopt:latest'
+  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/gsopt/gsopt:latest'
 
 options:
   logging: CLOUD_LOGGING_ONLY
