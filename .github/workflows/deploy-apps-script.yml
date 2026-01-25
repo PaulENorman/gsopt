@@ -20,7 +20,7 @@ jobs:
       run: npm install -g @google/clasp
     
     - name: Write CLASPRC_JSON secret to file
-      run: echo "$CLASPRC_JSON_SECRET" >> ~/.clasprc.json
+      run: echo "$CLASPRC_JSON_SECRET" > ~/.clasprc.json
       env:
         CLASPRC_JSON_SECRET: ${{ secrets.CLASPRC_JSON }}
     
