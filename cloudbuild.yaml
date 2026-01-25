@@ -31,6 +31,7 @@ steps:
       - 'europe-west1'
       - '--platform'
       - 'managed'
+      - '--allow-unauthenticated'  # Make it public
       - '--min-instances'
       - '0'
       - '--max-instances'
