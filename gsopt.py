@@ -24,37 +24,23 @@ from collections import defaultdict
 
 import jwt
 import numpy as np
-from flask import Flask, request, jsonify, abort
-import re
+from flask import Flask, request, jsonify
 
 from utils import setup_logging, authenticate_request
-from middleware import setup_request_logging
 
 logger = setup_logging(__name__)
 app = Flask(__name__)
-app = setup_request_logging(app)
-
-# Limit request size to prevent DoS
-app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB max
-
-@app.errorhandler(413)
-def request_entity_too_large(error):
-    return jsonify({"status": "error", "message": "Request too large (max 10MB)"}), 413
 
 # Rate limiting storage (in-memory)
 _rate_limit_storage: Dict[str, List[float]] = defaultdict(list)
-_RATE_LIMIT_WINDOW = 60  # seconds
+_RATE_LIMIT_WINDOW = 60
 _RATE_LIMIT_MAX_REQUESTS = 10
 
 def check_rate_limit(email: str) -> Tuple[bool, str]:
-    """
-    Check if user has exceeded rate limit for ping requests.
-    Returns (is_allowed, message)
-    """
+    """Check if user has exceeded rate limit for ping requests."""
     now = time.time()
     window_start = now - _RATE_LIMIT_WINDOW
     
-    # Clean old entries
     _rate_limit_storage[email] = [
         ts for ts in _rate_limit_storage[email] 
         if ts > window_start
@@ -290,25 +276,36 @@ def validate_existing_data(data: List[Dict[str, Any]], settings: OptimizerSettin
         return False, 'Too many data points (max 10000)'
     
     for i, point in enumerate(data):
-                logger.debug(f"New point {i}: {point}")
+        if not isinstance(point, dict):
             return False, f'Data point {i} is not a dictionary'
-        result_data = format_points_response(new_points, settings.param_names)
+        
         # Validate all expected parameters are present
-        return jsonify({n settings.param_names:
-            "status": "success", point:
-            "message": f"Generated {len(new_points)} new points", {param_name}'
-            "data": result_data
-        }), 200:
+        for param_name in settings.param_names:
+            if param_name not in point:
+                return False, f'Data point {i} missing parameter: {param_name}'
+            
+            try:
                 val = float(point[param_name])
-    except Exception as e:r NaN/Inf
-        logger.error(f"Failed to continue optimization: {str(e)}", exc_info=True)
-        return jsonify({"status": "error", "message": f"Failed to continue optimization: {str(e)}"}), 500
+                # Check for NaN/Inf
+                if not np.isfinite(val):
+                    return False, f'Data point {i} has invalid value for {param_name}'
             except (ValueError, TypeError):
                 return False, f'Data point {i} has non-numeric value for {param_name}'
+        
+        # Validate objective value if present
+        if 'objective' in point and point['objective'] not in ['', None]:
+            try:
+                obj_val = float(point['objective'])
+                if not np.isfinite(obj_val):
+                    return False, f'Data point {i} has invalid objective value'
+            except (ValueError, TypeError):
+                return False, f'Data point {i} has non-numeric objective'
+    
+    return True, ''
+
 @app.route('/test-connection', methods=['POST'])
-def test_connection() -> Tuple[Any, int]:sent
-    """ if 'objective' in point and point['objective'] not in ['', None]:
-    A simple endpoint to test that the service is up and authentication is working.
+def test_connection() -> Tuple[Any, int]:
+    """ A simple endpoint to test that the service is up and authentication is working.
     """         obj_val = float(point['objective'])
     is_valid, email, error_msg = authenticate_request(request)
     if not is_valid:return False, f'Data point {i} has invalid objective value'
@@ -445,149 +442,3 @@ def generate_plot() -> Tuple[Any, int]:itial_points)} initial points"
 @app.after_request_msg = authenticate_request(request)
 def add_security_headers(response):
     """Add security headers to all responses."""": error_msg}), 403
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    app.run(host='0.0.0.0', port=8080, debug=False)    # Note: `debug=False` is important for production environments.if __name__ == '__main__':    return response    response.headers['Pragma'] = 'no-cache'    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'    # Don't cache sensitive data    response.headers['Content-Security-Policy'] = "default-src 'none'"    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'    response.headers['X-XSS-Protection'] = '1; mode=block'    response.headers['X-Frame-Options'] = 'DENY'    response.headers['X-Content-Type-Options'] = 'nosniff'
-    # Prioritize environmental sha from build processes, fallback to Cloud Run revision
-    commit_sha = os.environ.get('COMMIT_SHA') or os.environ.get('K_REVISION') or 'development'
-    
-    logger.info(f"Connection test successful for: {email} (Build: {commit_sha})")
-    return jsonify({
-        "status": "success",
-        "message": f"Connection verified for {email}. Build: {commit_sha}",
-        "authenticated_user": email,
-        "commit_sha": commit_sha
-    }), 200
-
-
-@app.route('/ping', methods=['POST'])
-def ping() -> Tuple[Any, int]:
-    """
-    Lightweight ping endpoint to wake up the server without heavy library imports.
-    Used for proactive server warm-up from client interactions.
-    """
-    is_valid, email, error_msg = authenticate_request(request)
-    if not is_valid:
-        return jsonify({"status": "error", "message": error_msg}), 403
-    
-    # Check rate limit
-    is_allowed, rate_msg = check_rate_limit(email)
-    if not is_allowed:
-        logger.warning(f"Rate limit exceeded for {email}")
-        return jsonify({"status": "error", "message": rate_msg}), 429
-    
-    logger.info(f"Ping received from: {email}")
-    return jsonify({
-        "status": "success",
-        "message": "Server is ready",
-        "timestamp": time.time()
-    }), 200
-
-
-@app.route('/plot', methods=['POST'])
-def generate_plot() -> Tuple[Any, int]:
-    """Generates skopt plots and returns base64 image data."""
-    is_valid, email, error_msg = authenticate_request(request)
-    if not is_valid:
-        return jsonify({"status": "error", "message": error_msg}), 403
-
-    try:
-        # Lazy load plotting libraries only when needed
-        _ensure_matplotlib()
-        _ensure_skopt_plots()
-        import io
-        import base64
-        
-        data = request.get_json()
-        plot_type = data.get('plot_type', 'convergence')
-        raw_settings = data.get('settings', {})
-        settings = OptimizerSettings.from_dict(raw_settings)
-        existing_data = data.get('existing_data', [])
-        
-        # Check optimization mode for plot labeling
-        opt_mode = raw_settings.get('optimization_mode', 'Minimize')
-        is_max = opt_mode == 'Maximize'
-        suffix = " (-Objective)" if is_max else ""
-
-        optimizer_wrapper = build_optimizer(settings, existing_data)
-        
-        # Access the inner skopt.Optimizer instance from the wrapper
-        if hasattr(optimizer_wrapper, 'optimizer'):
-            skopt_opt = optimizer_wrapper.optimizer
-        else:
-            skopt_opt = optimizer_wrapper
-        
-        # skopt.Optimizer has a get_result() method that returns the full OptimizeResult object
-        # which contains the fitted models needed for plot_objective
-        if not hasattr(skopt_opt, 'get_result'):
-             return jsonify({"status": "error", "message": "Optimizer backend does not support get_result()."}), 400
-
-        res = skopt_opt.get_result()
-        
-        if not res.x_iters or len(res.x_iters) == 0:
-            return jsonify({"status": "error", "message": "No data available to plot"}), 400
-
-        # Adjust figure size based on plot type - Increased sizes for readability
-        if plot_type == 'objective' or plot_type == 'evaluations':
-             # Matrix plots need more space, especially for >3 dimensions
-             dim_count = len(settings.param_names)
-             if plot_type == 'evaluations':
-                 # Evaluations matrix needs even more space to prevent text overlap
-                 fig_size = max(16, dim_count * 5) 
-             else:
-                 # Increased multiplier and base size for objective plots
-                 fig_size = max(12, dim_count * 4)
-             plt.figure(figsize=(fig_size, fig_size))
-        else:
-             # Increased standard plot size
-             plt.figure(figsize=(14, 10))
-
-        try:
-            if plot_type == 'convergence':
-                plot_convergence(res)
-                plt.title(f"Convergence Plot{suffix}")
-            elif plot_type == 'evaluations':
-                plot_evaluations(res, bins=10)
-                # Remove title for cleaner look
-            elif plot_type == 'objective':
-                # plot_objective requires the models to be fitted.
-                # Since we called tell() in build_optimizer, the last model in res.models should be valid.
-                plot_objective(res, size=3) 
-                plt.suptitle(f"Objective Partial Dependence{suffix}", fontsize=16)
-        except Exception as plot_err:
-             logger.error(f"Specific plotting error: {plot_err}")
-             return jsonify({"status": "error", "message": f"Error creating {plot_type}: {str(plot_err)}"}), 500
-        
-        buf = io.BytesIO()
-        # Increase DPI for better resolution, especially for evaluations matrix
-        dpi = 150 if plot_type == 'evaluations' else 100
-        plt.savefig(buf, format='png', bbox_inches='tight', dpi=dpi)
-        buf.seek(0)
-        img_base64 = base64.b64encode(buf.read()).decode('utf-8')
-        plt.close('all')
-
-        return jsonify({
-            "status": "success",
-            "plot_data": img_base64
-        }), 200
-
-    except Exception as e:
-        logger.error(f"Plot generation failed: {str(e)}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-if __name__ == '__main__':
-    # Note: `debug=False` is important for production environments.
-    app.run(host='0.0.0.0', port=8080, debug=False)
