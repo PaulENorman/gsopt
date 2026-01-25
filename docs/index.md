@@ -4,7 +4,7 @@ title: Home
 nav_order: 1
 ---
 
-# gs-opt: Human-in-the-loop Batched Optimization
+# GSOpt: Human-in-the-loop Batched Optimization
 
 **Contents**
 1. [Overview](#overview)
@@ -19,44 +19,51 @@ nav_order: 1
 
 ## Overview
 
-Optimizing real-world engineering problems is often challenging. When the function you want to optimize is expensive, noisy, and lacks a simple mathematical form (aka "black box", with no information on the derivatives of the function), many traditional methods fall short. `gs-opt` is designed for this type of probem by implementing a **human-in-the-loop** batched submission optimization workflow for noisy black box problems. The optimization process is orchestrated through a Google Spread Sheet, so it easy to use for engineers.
+Optimizing real-world engineering problems is often challenging. When the function you want to optimize is expensive, noisy, and lacks a simple mathematical form (aka "black box", with no information on the derivatives of the function), many traditional methods fall short. GSOpt is designed for this type of problem by implementing a human-in-the-loop batched submission optimization workflow for noisy black box problems. The optimization process is orchestrated through a Google Sheet, so it’s easy to use for engineers.
 
 The basic workflow is:
-1.  The optimizer suggests a batch of initial points based on the parameter settings.
-2.  You, the user, perform the experiments and copy the results in a Google Spread Sheet.
-3.  Ask the optimizer for new promising poitns to run, and use the analysis plots to keep track of the optimization. Repeat as necesarry.
+1. The optimizer suggests a batch of initial points based on the parameter settings.
+2. You run the experiments and copy the results into the Google Sheet.
+3. Ask the optimizer for new promising points, and use the analysis plots to keep track of the optimization. Repeat as necessary.
 
 The Google Sheet acts as the central hub, storing all experimental data, providing basic analysis plots, and serving as the user interface for interacting with the optimization engine. All the optimization code and macros are in this repo: https://github.com/PaulENorman/gsopt.
 
 ## Google Sheet Usage
 
-This section demonstrates how to use the Google Sheet interface to run your optimization.
+### Make a Copy of the Sheet
+
+![Make a Copy]({{ '/images/howto0_saveacopy.jpg' | relative_url }})
+
+To use GSOpt, first save a copy of the template to your own Google Drive:
+- Open the template sheet, then go to File → Make a copy.
+- Save it to your Drive. Your copy will have its own bound Apps Script project.
 
 ### Opening the Sidebar
 
 ![Top Menu]({{ '/images/howto1_top_menu.jpg' | relative_url }})
 
-To begin, click **Extensions → gs-opt → Show Sidebar** from the top menu to open the optimization sidebar.
+To begin, click Extensions → GSOpt → Open Sidebar from the top menu to open the optimization sidebar.
 
 ### Sheet Tabs Overview
 
 ![Sheet Tabs]({{ '/images/howto2_tabs.jpg' | relative_url }})
 
 The workbook contains three main tabs:
-*   **Data**: Where you enter your experimental results and view all optimization runs.
-*   **Main Effects**: Analysis plots showing how the optimizer is performing.
-*   **Parameter Settings**: Configure your optimization parameters (names, bounds, etc.).
+* **Data**: Where you enter your experimental results and view all optimization runs.
+* **Analysis**: In-sheet charts showing progress and parameter relationships. Charts update automatically when objective values are edited.
+* **Parameter Settings**: Configure your optimization parameters (names, bounds, objective name, etc.).
 
 ### Optimizer Settings
 
 ![Optimizer Settings]({{ '/images/howto3_optimizer_settings.jpg' | relative_url }})
 
 The sidebar provides controls for configuring the optimization algorithm:
-*   **Regressor**: Choose the surrogate model (`GP`, `RF`, `ET`, or `GBRT`). See [The Optimizer](#the-optimizer) section for details.
-*   **Acquisition Function**: Select the strategy for choosing new points (`gp_hedge`, `LCB`, `EI`, or `PI`). See [The Optimizer](#the-optimizer) section for details.
-*   **Kappa**: Controls the exploration/exploitation trade-off when using `LCB`. Higher values encourage more exploration.
-*   **Batch Size**: Number of new points to request in each iteration.
-*   **Initial Points**: Number of random points to sample before starting model-based optimization.
+* **Base Estimator (Regressor)**: Choose the surrogate model (`GP`, `RF`, `ET`, or `GBRT`). See [The Optimizer](#the-optimizer) section for details.
+* **Acquisition Function**: Select the strategy for choosing new points (`gp_hedge`, `LCB`, `EI`, or `PI`).
+* **Kappa (LCB only)**: Controls the exploration/exploitation trade-off; higher values encourage exploration.
+* **Optimization Mode**: Choose Minimize or Maximize. Maximize will be handled by negating objective values before sending to the backend.
+* **Batch Size**: Number of new points to request per iteration.
+* **Initial Points**: Number of random points sampled before starting model-based optimization.
 
 For recommendations on which settings to use, see [Recommendations and Examples](#recommendations-and-examples).
 
@@ -64,56 +71,58 @@ For recommendations on which settings to use, see [Recommendations and Examples]
 
 ![Optimizer Controls]({{ '/images/howto4_optimizer_controls_plots.jpg' | relative_url }})
 
-The sidebar provides buttons to control the optimization process:
-*   **Initialize**: Generates the initial batch of random points to begin optimization.
-*   **Ask**: Requests a new batch of points from the optimizer based on previous results.
-*   **Generate Plots**: Creates analysis visualizations on the Main Effects tab.
+Use the sidebar buttons to control the optimization process:
+* **Initialize**: Generates the initial batch of random points to begin optimization.
+* **Ask**: Requests a new batch of points from the optimizer based on previous results.
+* **Test Connection**: Verifies that the Cloud Run backend is reachable and you have permission.
+* **Data Plots**: Opens advanced visualization dialogs (Convergence, Evaluations, Objective Partial Dependence, Parallel Coordinates).
 
 ### Entering Data After Initialization
 
 ![Data Post-Initialization]({{ '/images/howto5_data_post_init.jpg' | relative_url }})
 
-After clicking **Initialize**, the optimizer will populate the Data sheet with initial parameter combinations to test. **You must run your experiments and enter the results in the Objective Function column.** This is the core of the human-in-the-loop workflow - you perform the real-world experiments and provide the measurements.
+After clicking Initialize, the optimizer will populate the Data sheet with initial parameter combinations to test. Enter the results in the Objective column after running your experiments. In-sheet charts on the Analysis tab will update automatically.
 
 ### Entering Data After Ask
 
 ![Data Post-Ask]({{ '/images/howto6_data_post_ask.jpg' | relative_url }})
 
-After clicking **Ask**, new parameter combinations will be added to the Data sheet. Again, **run your experiments and enter the objective function values** in the designated column. Repeat the Ask → Experiment → Enter Data cycle to continue optimization.
+After clicking Ask, new parameter combinations will be added to the Data sheet. Run your experiments and enter the objective values. Repeat the Ask → Experiment → Enter Data cycle to continue optimization.
 
 ### Convergence Plot
 
 ![Convergence Plot]({{ '/images/howto7_convergence_plot.jpg' | relative_url }})
 
-The convergence plot shows the best objective function value found over the course of the optimization. This should generally decrease over time (for minimization problems), indicating the optimizer is finding better solutions.
+Shows the best objective value found over iterations. For minimization problems, it should generally decrease as better solutions are found.
 
 ### Evaluations Matrix
 
 ![Evaluations Matrix]({{ '/images/howto8_evaluations_matrix.jpg' | relative_url }})
 
-The evaluations matrix visualizes where in the parameter space the optimizer has sampled points. As optimization progresses, you should see clustering around promising regions, indicating the optimizer is honing in on a minimum.
+Visualizes sampling locations in parameter space. Over time, you should see clustering around promising regions.
 
-### Partial Dependence Plots
+### Objective Partial Dependence
 
 ![Partial Dependence Plots]({{ '/images/howto9_parttial_dependence_plot.jpg' | relative_url }})
 
-Partial dependence plots show how the objective function varies with each individual parameter while marginalizing over the others. These help identify which parameters have the strongest effect on your objective. For more information, see the [`scikit-optimize` documentation on partial dependence](https://scikit-optimize.github.io/stable/modules/plots.html#skopt.plots.plot_objective).
+Shows how the modeled objective varies with each parameter while marginalizing over the others. See the [scikit-optimize documentation](https://scikit-optimize.github.io/stable/modules/plots.html#skopt.plots.plot_objective).
 
 ### Parallel Coordinate Plots
 
 ![Parallel Coordinate Plots]({{ '/images/howto10_parallel coordinates_plot.jpg' | relative_url }})
 
-Parallel coordinate plots provide another way to visualize the relationship between parameters and the objective function. Each vertical axis represents a parameter, and lines connect the parameter values for each evaluation, colored by the objective function value.
+Provides a multi-axis view of parameters and objective values.
 
 ### Parameter Settings
 
 ![Parameter Settings]({{ '/images/howto12_paramter_settings.jpg' | relative_url }})
 
-The Parameter Settings tab is where you configure your optimization problem:
-*   **Parameter Names**: Give meaningful names to each parameter.
-*   **Lower/Upper Bounds**: Define the search range for each parameter.
+Configure your optimization problem:
+* **Parameter Names**: Provide meaningful names.
+* **Lower/Upper Bounds**: Define the search range for each parameter.
+* **Objective Name**: Sets the label used in headers and plots.
 
-When you update names or bounds here, they automatically populate throughout the other sheets. Similarly, changes made in the sidebar will be reflected in this tab.
+When you update names or the objective in Parameter Settings, headers in the Data sheet update automatically. Charts in the Analysis tab refresh when objective values are edited.
 
 ## Backend Architecture
 

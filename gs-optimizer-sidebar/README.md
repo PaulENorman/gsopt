@@ -17,27 +17,32 @@ gs-optimizer-sidebar
 
 ## Features
 
-- **Sidebar Interface**: A user-friendly sidebar that provides buttons and input fields for all functionalities related to Bayesian optimization.
-- **Initialization of Optimization**: Users can initialize optimization tasks directly from the sidebar.
-- **Continue Optimization**: Users can continue optimization processes and append new points to the data.
-- **Test Connection**: A feature to test the connection to the Cloud Run service.
-- **Data Management**: Functions to read and write data to the Google Sheets, update headers, and manage charts.
+- Sidebar Interface with controls aligned to the codebase:
+  - Initialize and Ask actions
+  - Test Connection to Cloud Run
+  - Data Plots: Convergence, Evaluations, Objective Partial Dependence (opens modeless dialogs)
+  - Parallel Coordinates visualization
+- Initialization of Optimization via Cloud Run backend
+- Continue Optimization with appended suggestions
+- Data Management: read/write points, auto-update headers, and in-sheet charts on the Analysis tab that refresh when objectives change
 
 ## Setup Instructions
 
-1. **Open Google Sheets**: Create or open an existing Google Sheets document.
-2. **Access Script Editor**: Click on `Extensions` > `Apps Script` to open the Google Apps Script editor.
-3. **Copy Project Files**: Create the necessary files as per the project structure outlined above.
-4. **Deploy the Script**: Save and deploy the script as a web app or bound script as needed.
-5. **Open the Sidebar**: Use the custom menu created in the Google Sheets interface to open the sidebar and start using the optimization features.
+1. Open Google Sheets: Create or open an existing Google Sheet.
+2. Access Script Editor: Click on Extensions → Apps Script to open the editor.
+3. Copy Project Files: Create the necessary files as per the project structure outlined above.
+4. Deploy the Script: Save and deploy the script as needed.
+5. Open the Sidebar: Use Extensions → GSOpt → Open Sidebar.
 
 ## Usage
 
-- Use the sidebar to initialize optimization, continue optimization, and manage data.
-- The sidebar will provide feedback on actions taken and display any relevant messages or errors.
+- Initialize to generate initial points; enter objective values in the Data sheet.
+- Ask to request new points; enter new objective values.
+- Test Connection to verify Cloud Run reachability and permissions.
+- Use Data Plots (Convergence, Evaluations, Objective Partial Dependence) and Parallel Coordinates for visualization. Advanced plots open in dialogs; in-sheet charts on the Analysis tab update automatically when editing objective values.
 
-## Contributing
+## Notes
 
-Feel free to contribute to this project by submitting issues or pull requests. Your feedback and contributions are welcome!
+- Authentication: The backend expects a Gmail account and Cloud Run invoker permission; identity tokens and the X-User-Email header are sent automatically from Apps Script.
 
 
