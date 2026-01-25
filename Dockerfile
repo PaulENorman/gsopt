@@ -61,4 +61,4 @@ USER appuser
 EXPOSE 8080
 
 # Use exec form for proper signal handling
-CMD ["gunicorn", "--bind", ":8080", "--workers", "1", "--threads", "8", "--timeout", "0", "app:app"]
+CMD ["gunicorn", "--bind", ":8080", "--workers", "1", "--threads", "8", "--timeout", "0", "gsopt:app"]
