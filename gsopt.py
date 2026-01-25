@@ -143,15 +143,12 @@ def build_optimizer(settings: OptimizerSettings, existing_data: Optional[List[Di
     It then initializes the optimizer with the given settings and, if provided,
     trains it on existing data.
     """
-    # Lazy load optimizer builder only when needed
     _ensure_optimizer_builder()
     
     optimizer_type = settings.base_estimator
     
     logger.info(f"Building optimizer: {optimizer_type}")
     
-    # The optimizer type string is parsed to support different backends.
-    # For example, 'SKOPT-GP' uses the 'scikit-optimize' backend with a 'GP' model.
     if '-' in optimizer_type:
         parts = optimizer_type.split('-', 1)
         prefix, algo = parts[0].upper(), parts[1]
@@ -187,258 +184,230 @@ def format_points_response(
     
     return result
 
-def validate_optimizer_settings(data: Dict[str, Any]) -> Tuple[bool, str]:
-    """
-    Validates optimizer settings to prevent injection attacks and resource abuse.
-    
-    Returns:
-        (is_valid, error_message)
-    """
-    # Check required fields
-    required_fields = ['num_params', 'param_names', 'param_mins', 'param_maxes']
-    for field in required_fields:
-        if field not in data:
-            return False, f'Missing required field: {field}'
-    
-    # Validate parameter count (prevent resource exhaustion)
-    num_params = data.get('num_params', 0)
-    if not isinstance(num_params, int) or num_params < 1 or num_params > 100:
-        return False, 'num_params must be between 1 and 100'
-    
-    # Validate parameter names (prevent injection)
-    param_names = data.get('param_names', [])
-    if len(param_names) != num_params:
-        return False, 'param_names length must match num_params'
-    
-    name_pattern = re.compile(r'^[a-zA-Z0-9_\-\s]{1,50}$')
-    for name in param_names:
-        if not isinstance(name, str) or not name_pattern.match(name):
-            return False, f'Invalid parameter name: {name}. Use only alphanumeric, underscore, hyphen, space (max 50 chars)'
-    
-    # Validate bounds
-    param_mins = data.get('param_mins', [])
-    param_maxes = data.get('param_maxes', [])
-    
-    if len(param_mins) != num_params or len(param_maxes) != num_params:
-        return False, 'Parameter bounds must match num_params'
-    
-    for i in range(num_params):
-        try:
-            min_val = float(param_mins[i])
-            max_val = float(param_maxes[i])
-            
-            # Prevent extreme values that could cause numerical issues
-            if abs(min_val) > 1e10 or abs(max_val) > 1e10:
-                return False, f'Parameter bounds too large (max ±1e10)'
-            
-            if min_val >= max_val:
-                return False, f'Invalid bounds for {param_names[i]}: min must be < max'
-        except (ValueError, TypeError):
-            return False, f'Invalid numeric bounds for {param_names[i]}'
-    
-    # Validate batch sizes (prevent resource exhaustion)
-    num_init_points = data.get('num_init_points', 10)
-    batch_size = data.get('batch_size', 5)
-    
-    if not isinstance(num_init_points, int) or num_init_points < 1 or num_init_points > 1000:
-        return False, 'num_init_points must be between 1 and 1000'
-    
-    if not isinstance(batch_size, int) or batch_size < 1 or batch_size > 100:
-        return False, 'batch_size must be between 1 and 100'
-    
-    # Validate estimator and acquisition function (whitelist only)
-    valid_estimators = ['GP', 'RF', 'ET', 'GBRT']
-    base_estimator = data.get('base_estimator', 'GP')
-    if '-' in base_estimator:
-        base_estimator = base_estimator.split('-')[1]
-    if base_estimator not in valid_estimators:
-        return False, f'Invalid base_estimator. Must be one of: {valid_estimators}'
-    
-    valid_acq_funcs = ['EI', 'PI', 'LCB', 'gp_hedge']
-    acq_func = data.get('acquisition_function', 'EI')
-    if acq_func not in valid_acq_funcs:
-        return False, f'Invalid acquisition_function. Must be one of: {valid_acq_funcs}'
-    
-    return True, ''
 
-def validate_existing_data(data: List[Dict[str, Any]], settings: OptimizerSettings) -> Tuple[bool, str]:
+@app.route('/init-optimization', methods=['POST'])
+def init_optimization() -> Tuple[Any, int]:
     """
-    Validates existing data points to prevent injection and ensure data integrity.
+    Flask endpoint to initialize an optimization process.
     
-    Returns:
-        (is_valid, error_message)
+    It expects a JSON payload with optimization settings and returns a set of
+    initial points for the client to evaluate. These points are typically
+    generated from a random or quasi-random sampling of the search space.
     """
-    if not isinstance(data, list):
-        return False, 'existing_data must be a list'
-    
-    # Limit number of data points to prevent memory exhaustion
-    if len(data) > 10000:
-        return False, 'Too many data points (max 10000)'
-    
-    for i, point in enumerate(data):
-        if not isinstance(point, dict):
-            return False, f'Data point {i} is not a dictionary'
-        
-        # Validate all expected parameters are present
-        for param_name in settings.param_names:
-            if param_name not in point:
-                return False, f'Data point {i} missing parameter: {param_name}'
+    is_valid, email, error_msg = authenticate_request(request)
+    if not is_valid:
+        return jsonify({"status": "error", "message": error_msg}), 403
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"status": "error", "message": "Request must be JSON"}), 400
             
-            try:
-                val = float(point[param_name])
-                # Check for NaN/Inf
-                if not np.isfinite(val):
-                    return False, f'Data point {i} has invalid value for {param_name}'
-            except (ValueError, TypeError):
-                return False, f'Data point {i} has non-numeric value for {param_name}'
+        settings_data = data.get('settings')
+        if not settings_data:
+            return jsonify({"status": "error", "message": "settings are required"}), 400
+
+        logger.info(f"Initializing optimization for user: {email}")
         
-        # Validate objective value if present
-        if 'objective' in point and point['objective'] not in ['', None]:
-            try:
-                obj_val = float(point['objective'])
-                if not np.isfinite(obj_val):
-                    return False, f'Data point {i} has invalid objective value'
-            except (ValueError, TypeError):
-                return False, f'Data point {i} has non-numeric objective'
+        settings = OptimizerSettings.from_dict(settings_data)
+        optimizer = build_optimizer(settings)
+        
+        initial_points = optimizer.ask(n_points=settings.num_init_points)
+        logger.info(f"Generated {len(initial_points)} initial points")
+        
+        result_data = format_points_response(initial_points, settings.param_names)
+
+        return jsonify({
+            "status": "success",
+            "message": f"Generated {len(initial_points)} initial points",
+            "data": result_data
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize optimization: {str(e)}", exc_info=True)
+        return jsonify({"status": "error", "message": f"Failed to initialize optimization: {str(e)}"}), 500
+
+
+@app.route('/continue-optimization', methods=['POST'])
+def continue_optimization() -> Tuple[Any, int]:
+    """
+    Flask endpoint to continue an existing optimization process.
     
-    return True, ''
+    It takes the current settings and all previously evaluated data points.
+    The optimizer is "retrained" on this data, and a new batch of points
+    is generated for the client to evaluate next.
+    """
+    is_valid, email, error_msg = authenticate_request(request)
+    if not is_valid:
+        return jsonify({"status": "error", "message": error_msg}), 403
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"status": "error", "message": "Request must be JSON"}), 400
+
+        settings_data = data.get('settings')
+        existing_data = data.get('existing_data', [])
+        
+        if not settings_data:
+            return jsonify({"status": "error", "message": "settings are required"}), 400
+
+        logger.info(f"Continuing optimization for user: {email}")
+        logger.info(f"Received {len(existing_data)} data points from client")
+        
+        settings = OptimizerSettings.from_dict(settings_data)
+        
+        if existing_data:
+            logger.info(f"Sample data point: {existing_data[0]}")
+        
+        optimizer = build_optimizer(settings, existing_data)
+        
+        new_points = optimizer.ask(n_points=settings.batch_size)
+        
+        if len(new_points) > 0 and not isinstance(new_points[0], (list, np.ndarray)):
+            new_points = [new_points]
+            
+        logger.info(f"Generated {len(new_points)} new points")
+        
+        for i, point in enumerate(new_points):
+            try:
+                logger.debug(f"New point {i}: {[f'{val:.4f}' for val in point]}")
+            except (TypeError, ValueError):
+                logger.debug(f"New point {i}: {point}")
+        
+        result_data = format_points_response(new_points, settings.param_names)
+        
+        return jsonify({
+            "status": "success",
+            "message": f"Generated {len(new_points)} new points",
+            "data": result_data
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Failed to continue optimization: {str(e)}", exc_info=True)
+        return jsonify({"status": "error", "message": f"Failed to continue optimization: {str(e)}"}), 500
+
 
 @app.route('/test-connection', methods=['POST'])
 def test_connection() -> Tuple[Any, int]:
-    """ A simple endpoint to test that the service is up and authentication is working.
-    """         obj_val = float(point['objective'])
+    """
+    A simple endpoint to test that the service is up and authentication is working.
+    """
     is_valid, email, error_msg = authenticate_request(request)
-    if not is_valid:return False, f'Data point {i} has invalid objective value'
+    if not is_valid:
         return jsonify({"status": "error", "message": error_msg}), 403
-                return False, f'Data point {i} has non-numeric objective'
-    # Prioritize environmental sha from build processes, fallback to Cloud Run revision
+
     commit_sha = os.environ.get('COMMIT_SHA') or os.environ.get('K_REVISION') or 'development'
     
     logger.info(f"Connection test successful for: {email} (Build: {commit_sha})")
-    return jsonify({n() -> Tuple[Any, int]:
+    return jsonify({
         "status": "success",
         "message": f"Connection verified for {email}. Build: {commit_sha}",
         "authenticated_user": email,
-        "commit_sha": commit_shath optimization settings and returns a set of
-    }), 200 points for the client to evaluate. These points are typically
-    generated from a random or quasi-random sampling of the search space.
-    """
-@app.route('/ping', methods=['POST'])enticate_request(request)
+        "commit_sha": commit_sha
+    }), 200
+
+
+@app.route('/ping', methods=['POST'])
 def ping() -> Tuple[Any, int]:
-    """ return jsonify({"status": "error", "message": error_msg}), 403
+    """
     Lightweight ping endpoint to wake up the server without heavy library imports.
     Used for proactive server warm-up from client interactions.
-    """ data = request.get_json()
+    """
     is_valid, email, error_msg = authenticate_request(request)
-    if not is_valid:sonify({"status": "error", "message": "Request must be JSON"}), 400
-        return jsonify({"status": "error", "message": error_msg}), 403
-        settings_data = data.get('settings')
-    # Check rate limits_data:
-    is_allowed, rate_msg = check_rate_limit(email)ssage": "settings are required"}), 400
-    if not is_allowed:
-        logger.warning(f"Rate limit exceeded for {email}")
-        return jsonify({"status": "error", "message": rate_msg}), 429ings(settings_data)
-        if not is_valid_settings:
-    logger.info(f"Ping received from: {email}")rom {email}: {validation_error}")
-    return jsonify({sonify({"status": "error", "message": validation_error}), 400
-        "status": "success",
-        "message": "Server is ready",timization for user: {email}")
-        "timestamp": time.time()
-    }), 200tings = OptimizerSettings.from_dict(settings_data)
-        optimizer = build_optimizer(settings)
-        
-@app.route('/plot', methods=['POST'])k(n_points=settings.num_init_points)
-def generate_plot() -> Tuple[Any, int]:itial_points)} initial points"
-    """Generates skopt plots and returns base64 image data."""
-    is_valid, email, error_msg = authenticate_request(request)ettings.param_names)
     if not is_valid:
         return jsonify({"status": "error", "message": error_msg}), 403
-            "status": "success",
-    try:    "message": f"Generated {len(initial_points)} initial points",
-        # Lazy load plotting libraries only when needed
+    
+    is_allowed, rate_msg = check_rate_limit(email)
+    if not is_allowed:
+        logger.warning(f"Rate limit exceeded for {email}")
+        return jsonify({"status": "error", "message": rate_msg}), 429
+    
+    logger.info(f"Ping received from: {email}")
+    return jsonify({
+        "status": "success",
+        "message": "Server is ready",
+        "timestamp": time.time()
+    }), 200
+
+
+@app.route('/plot', methods=['POST'])
+def generate_plot() -> Tuple[Any, int]:
+    """Generates skopt plots and returns base64 image data."""
+    is_valid, email, error_msg = authenticate_request(request)
+    if not is_valid:
+        return jsonify({"status": "error", "message": error_msg}), 403
+
+    try:
         _ensure_matplotlib()
         _ensure_skopt_plots()
-        import ioion as e:
-        import base64f"Failed to initialize optimization: {str(e)}", exc_info=True)
-        # Don't expose internal errors to client
-        data = request.get_json() "error", "message": "Internal server error"}), 500
+        import io
+        import base64
+        
+        data = request.get_json()
         plot_type = data.get('plot_type', 'convergence')
         raw_settings = data.get('settings', {})
         settings = OptimizerSettings.from_dict(raw_settings)
         existing_data = data.get('existing_data', [])
         
-        # Check optimization mode for plot labelingtion process.
         opt_mode = raw_settings.get('optimization_mode', 'Minimize')
-        is_max = opt_mode == 'Maximize'll previously evaluated data points.
-        suffix = " (-Objective)" if is_max else "" a new batch of points
-    is generated for the client to evaluate next.
+        is_max = opt_mode == 'Maximize'
+        suffix = " (-Objective)" if is_max else ""
+
         optimizer_wrapper = build_optimizer(settings, existing_data)
-        alid, email, error_msg = authenticate_request(request)
-        # Access the inner skopt.Optimizer instance from the wrapper
-        if hasattr(optimizer_wrapper, 'optimizer'):": error_msg}), 403
+        
+        if hasattr(optimizer_wrapper, 'optimizer'):
             skopt_opt = optimizer_wrapper.optimizer
         else:
             skopt_opt = optimizer_wrapper
-        if not data:
-        # skopt.Optimizer has a get_result() method that returns the full OptimizeResult object
-        # which contains the fitted models needed for plot_objective
+        
         if not hasattr(skopt_opt, 'get_result'):
              return jsonify({"status": "error", "message": "Optimizer backend does not support get_result()."}), 400
-        
+
         res = skopt_opt.get_result()
-            return jsonify({"status": "error", "message": "settings are required"}), 400
+        
         if not res.x_iters or len(res.x_iters) == 0:
             return jsonify({"status": "error", "message": "No data available to plot"}), 400
-        is_valid_settings, validation_error = validate_optimizer_settings(settings_data)
-        # Adjust figure size based on plot type - Increased sizes for readability
-        if plot_type == 'objective' or plot_type == 'evaluations':ation_error}")
-             # Matrix plots need more space, especially for >3 dimensionsr}), 400
+
+        if plot_type == 'objective' or plot_type == 'evaluations':
              dim_count = len(settings.param_names)
-             if plot_type == 'evaluations':on for user: {email}")
-                 # Evaluations matrix needs even more space to prevent text overlap
+             if plot_type == 'evaluations':
                  fig_size = max(16, dim_count * 5) 
-             else: OptimizerSettings.from_dict(settings_data)
-                 # Increased multiplier and base size for objective plots
+             else:
                  fig_size = max(12, dim_count * 4)
-             plt.figure(figsize=(fig_size, fig_size))_data(existing_data, settings)
-        else:t is_valid_data:
-             # Increased standard plot sizerom {email}: {data_error}")
-             plt.figure(figsize=(14, 10))ror", "message": data_error}), 400
-        
-        try:mizer = build_optimizer(settings, existing_data)
+             plt.figure(figsize=(fig_size, fig_size))
+        else:
+             plt.figure(figsize=(14, 10))
+
+        try:
             if plot_type == 'convergence':
-                plot_convergence(res)points=settings.batch_size)
+                plot_convergence(res)
                 plt.title(f"Convergence Plot{suffix}")
-            elif plot_type == 'evaluations': of lists (multiple points)
-                plot_evaluations(res, bins=10)nce(new_points[0], (list, np.ndarray)):
-                # Remove title for cleaner look
+            elif plot_type == 'evaluations':
+                plot_evaluations(res, bins=10)
             elif plot_type == 'objective':
-                # plot_objective requires the models to be fitted.
-                # Since we called tell() in build_optimizer, the last model in res.models should be valid.
-                plot_objective(res, size=3) ):
+                plot_objective(res, size=3) 
                 plt.suptitle(f"Objective Partial Dependence{suffix}", fontsize=16)
-        except Exception as plot_err:int {i}: {[f'{val:.4f}' for val in point]}")
+        except Exception as plot_err:
              logger.error(f"Specific plotting error: {plot_err}")
              return jsonify({"status": "error", "message": f"Error creating {plot_type}: {str(plot_err)}"}), 500
         
-        buf = io.BytesIO()at_points_response(new_points, settings.param_names)
-        # Increase DPI for better resolution, especially for evaluations matrix
+        buf = io.BytesIO()
         dpi = 150 if plot_type == 'evaluations' else 100
         plt.savefig(buf, format='png', bbox_inches='tight', dpi=dpi)
-        buf.seek(0)e": f"Generated {len(new_points)} new points",
+        buf.seek(0)
         img_base64 = base64.b64encode(buf.read()).decode('utf-8')
         plt.close('all')
-        
-        return jsonify({e:
-            "status": "success", continue optimization: {str(e)}", exc_info=True)
-            "plot_data": img_base64error", "message": "Internal server error"}), 500
+
+        return jsonify({
+            "status": "success",
+            "plot_data": img_base64
         }), 200
 
-    except Exception as e:on', methods=['POST'])
+    except Exception as e:
         logger.error(f"Plot generation failed: {str(e)}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
-    A simple endpoint to test that the service is up and authentication is working.
-    """
-@app.after_request_msg = authenticate_request(request)
-def add_security_headers(response):
-    """Add security headers to all responses."""": error_msg}), 403
+
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080, debug=False)
