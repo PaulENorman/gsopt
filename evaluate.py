@@ -343,7 +343,7 @@ def compare_optimizers(
     if optimizers is None:
         optimizers = OPTIMIZERS
     
-    plt.figure(figsize=(12, 7))
+    plt.figure(figsize=(16, 10))
     
     # Store min/max values for adjusting plot limits later.
     plot_min_val = float('inf')
@@ -441,7 +441,7 @@ def compare_acquisition_functions(
         "gp_hedge": {"acquisition_function": "gp_hedge", "acq_optimizer": "auto", "acq_func_kwargs": {}},
     }
 
-    plt.figure(figsize=(12, 7))
+    plt.figure(figsize=(16, 10))
     plot_min_val = float('inf')
     plot_max_val = float('-inf')
 

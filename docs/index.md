@@ -30,7 +30,90 @@ The Google Sheet acts as the central hub, storing all experimental data, providi
 
 ## Google Sheet Usage
 
-*(This section will be populated with screenshots demonstrating the usage of the Google Sheet.)*
+This section demonstrates how to use the Google Sheet interface to run your optimization.
+
+### Opening the Sidebar
+
+![Top Menu]({{ '/images/howto1_top_menu.jpg' | relative_url }})
+
+To begin, click **Extensions → gs-opt → Show Sidebar** from the top menu to open the optimization sidebar.
+
+### Sheet Tabs Overview
+
+![Sheet Tabs]({{ '/images/howto2_tabs.jpg' | relative_url }})
+
+The workbook contains three main tabs:
+*   **Data**: Where you enter your experimental results and view all optimization runs.
+*   **Main Effects**: Analysis plots showing how the optimizer is performing.
+*   **Parameter Settings**: Configure your optimization parameters (names, bounds, etc.).
+
+### Optimizer Settings
+
+![Optimizer Settings]({{ '/images/howto3_optimizer_settings.jpg' | relative_url }})
+
+The sidebar provides controls for configuring the optimization algorithm:
+*   **Regressor**: Choose the surrogate model (`GP`, `RF`, `ET`, or `GBRT`). See [The Optimizer](#the-optimizer) section for details.
+*   **Acquisition Function**: Select the strategy for choosing new points (`gp_hedge`, `LCB`, `EI`, or `PI`). See [The Optimizer](#the-optimizer) section for details.
+*   **Kappa**: Controls the exploration/exploitation trade-off when using `LCB`. Higher values encourage more exploration.
+*   **Batch Size**: Number of new points to request in each iteration.
+*   **Initial Points**: Number of random points to sample before starting model-based optimization.
+
+For recommendations on which settings to use, see [Recommendations and Examples](#recommendations-and-examples).
+
+### Optimizer Controls
+
+![Optimizer Controls]({{ '/images/howto4_optimizer_controls_plots.jpg' | relative_url }})
+
+The sidebar provides buttons to control the optimization process:
+*   **Initialize**: Generates the initial batch of random points to begin optimization.
+*   **Ask**: Requests a new batch of points from the optimizer based on previous results.
+*   **Generate Plots**: Creates analysis visualizations on the Main Effects tab.
+
+### Entering Data After Initialization
+
+![Data Post-Initialization]({{ '/images/howto5_data_post_init.jpg' | relative_url }})
+
+After clicking **Initialize**, the optimizer will populate the Data sheet with initial parameter combinations to test. **You must run your experiments and enter the results in the Objective Function column.** This is the core of the human-in-the-loop workflow - you perform the real-world experiments and provide the measurements.
+
+### Entering Data After Ask
+
+![Data Post-Ask]({{ '/images/howto6_data_post_ask.jpg' | relative_url }})
+
+After clicking **Ask**, new parameter combinations will be added to the Data sheet. Again, **run your experiments and enter the objective function values** in the designated column. Repeat the Ask → Experiment → Enter Data cycle to continue optimization.
+
+### Convergence Plot
+
+![Convergence Plot]({{ '/images/howto7_convergence_plot.jpg' | relative_url }})
+
+The convergence plot shows the best objective function value found over the course of the optimization. This should generally decrease over time (for minimization problems), indicating the optimizer is finding better solutions.
+
+### Evaluations Matrix
+
+![Evaluations Matrix]({{ '/images/howto8_evaluations_matrix.jpg' | relative_url }})
+
+The evaluations matrix visualizes where in the parameter space the optimizer has sampled points. As optimization progresses, you should see clustering around promising regions, indicating the optimizer is honing in on a minimum.
+
+### Partial Dependence Plots
+
+![Partial Dependence Plots]({{ '/images/howto9_parttial_dependence_plot.jpg' | relative_url }})
+
+Partial dependence plots show how the objective function varies with each individual parameter while marginalizing over the others. These help identify which parameters have the strongest effect on your objective. For more information, see the [`scikit-optimize` documentation on partial dependence](https://scikit-optimize.github.io/stable/modules/plots.html#skopt.plots.plot_objective).
+
+### Parallel Coordinate Plots
+
+![Parallel Coordinate Plots]({{ '/images/howto10_parallel coordinates_plot.jpg' | relative_url }})
+
+Parallel coordinate plots provide another way to visualize the relationship between parameters and the objective function. Each vertical axis represents a parameter, and lines connect the parameter values for each evaluation, colored by the objective function value.
+
+### Parameter Settings
+
+![Parameter Settings]({{ '/images/howto12_paramter_settings.jpg' | relative_url }})
+
+The Parameter Settings tab is where you configure your optimization problem:
+*   **Parameter Names**: Give meaningful names to each parameter.
+*   **Lower/Upper Bounds**: Define the search range for each parameter.
+
+When you update names or bounds here, they automatically populate throughout the other sheets. Similarly, changes made in the sidebar will be reflected in this tab.
 
 ## Backend Architecture
 
@@ -101,13 +184,13 @@ The results were generated with the following settings to simulate a realistic u
 
 The following plot compares the performance of different surrogate models (regressors) on the Rosenbrock function, a classic difficult non-convex problem. All optimizers used the `gp_hedge` acquisition function. The `SKOPT-GP` (Gaussian Process) model consistently finds a better solution faster than the tree-based methods.
 
-![Rosenbrock Regressor Comparison]({{ '/test_results/rosenbrock_regressor_comparison.png' | relative_url }})
+![Rosenbrock Regressor Comparison]({{ '/images/test_results/rosenbrock_regressor_comparison.png' | relative_url }})
 
 #### Acquisition Function Performance
 
 This plot compares different acquisition functions for the `SKOPT-GP` optimizer on the Ackley function, which has many local minima. The `gp_hedge` strategy shows strong, consistent performance. `LCB` with a high kappa (`k=4.0`) is also effective at exploring, while `LCB` with a low kappa (`k=0.5`) exploits more and converges slower on this particular problem.
 
-![Ackley Acquisition Function Comparison]({{ '/test_results/ackley_acq_func_comparison.png' | relative_url }})
+![Ackley Acquisition Function Comparison]({{ '/images/test_results/ackley_acq_func_comparison.png' | relative_url }})
 
 ---
 
