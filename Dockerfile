@@ -6,8 +6,8 @@ FROM python:3.12-slim as builder
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 # Set environment variables to prevent pyc files and buffering
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
@@ -39,19 +39,16 @@ WORKDIR /app
 
 # Build Argument for Versioning - remove default to make it required
 ARG COMMIT_SHA
-ENV COMMIT_SHA=${COMMIT_SHA:-development}
+ENV COMMIT_SHA=${COMMIT_SHA:-development} \
+    PATH="/opt/venv/bin:$PATH"
 
 # Copy the virtual environment from the builder stage
 COPY --from=builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy only necessary application files (order by change frequency)
-# Static config files first
-COPY --chown=appuser:appuser requirements.txt ./
-
-# Application code last (changes most frequently)
-COPY --chown=appuser:appuser *.py ./
-COPY --chown=appuser:appuser gsopt/ ./gsopt/ 
+# Consolidate requirements and source code copying
+# This replaces the failing COPY gsopt/ call
+COPY --chown=appuser:appuser requirements.txt .
+COPY --chown=appuser:appuser . .
 
 # Security: Clean up
 RUN find . -type f -name "*.pyc" -delete && \
@@ -64,4 +61,4 @@ USER appuser
 EXPOSE 8080
 
 # Use exec form for proper signal handling
-CMD ["gunicorn", "--bind", ":8080", "--workers", "1", "--threads", "8", "--timeout", "0", "gsopt:app"]
+CMD ["gunicorn", "--bind", ":8080", "--workers", "1", "--threads", "8", "--timeout", "0", "app:app"]
