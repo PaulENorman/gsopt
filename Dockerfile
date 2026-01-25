@@ -17,16 +17,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy ONLY requirements first. 
-# Docker will cache this layer as long as requirements.txt doesn't change.
-COPY requirements.txt .
-
-# Install dependencies into a virtual environment
-# This makes copying them to the final image easier
+# Create virtual environment
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+
+# Upgrade pip first (cached separately)
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Copy and install requirements
+# Split into base requirements if you have them, otherwise this is fine
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # --- Final Stage ---
 FROM python:3.12-slim
@@ -44,14 +45,17 @@ ENV COMMIT_SHA=${COMMIT_SHA:-development}
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy the application code
-# This is the layer that changes most often, so we put it last.
-COPY --chown=appuser:appuser . .
+# Copy only necessary application files (order by change frequency)
+# Static config files first
+COPY --chown=appuser:appuser requirements.txt ./
 
-# Security: Remove unnecessary files
+# Application code last (changes most frequently)
+COPY --chown=appuser:appuser *.py ./
+COPY --chown=appuser:appuser gsopt/ ./gsopt/ 
+
+# Security: Clean up
 RUN find . -type f -name "*.pyc" -delete && \
-    find . -type d -name "__pycache__" -delete && \
-    rm -rf tests/ .git/ .github/ *.md
+    find . -type d -name "__pycache__" -delete
 
 # Switch to non-root user
 USER appuser

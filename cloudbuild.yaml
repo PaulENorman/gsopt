@@ -1,14 +1,20 @@
 steps:
-  # Build the container image
+  # Build with BuildKit and inline cache
   - name: 'gcr.io/cloud-builders/docker'
+    env:
+      - 'DOCKER_BUILDKIT=1'
     args:
       - 'build'
       - '--build-arg'
-      - 'COMMIT_SHA=$SHORT_SHA'
+      - 'BUILDKIT_INLINE_CACHE=1'
+      - '--build-arg'
+      - 'COMMIT_SHA=$COMMIT_SHA'
+      - '--cache-from'
+      - 'gcr.io/$PROJECT_ID/gsopt:latest'
       - '-t'
-      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/gsopt:$SHORT_SHA'
+      - 'gcr.io/$PROJECT_ID/gsopt:$COMMIT_SHA'
       - '-t'
-      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/gsopt:latest'
+      - 'gcr.io/$PROJECT_ID/gsopt:latest'
       - '.'
 
   # Push the container image to Artifact Registry

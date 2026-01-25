@@ -1,0 +1,56 @@
+# Git
+.git
+.gitignore
+.github
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info
+dist
+build
+.pytest_cache
+.coverage
+htmlcov
+
+# Virtual environments
+venv
+env
+ENV
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Documentation
+*.md
+README*
+LICENSE
+docs/
+
+# Tests
+tests/
+test_*.py
+*_test.py
+
+# Docker
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+
+# CI/CD
+.travis.yml
+.gitlab-ci.yml
+cloudbuild.yaml
+
+# Misc
+*.log
+.DS_Store
+.env
+.env.*
