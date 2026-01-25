@@ -300,8 +300,12 @@ def generate_plot() -> Tuple[Any, int]:
         if plot_type == 'objective' or plot_type == 'evaluations':
              # Matrix plots need more space, especially for >3 dimensions
              dim_count = len(settings.param_names)
-             # Increased multiplier and base size
-             fig_size = max(12, dim_count * 4) 
+             if plot_type == 'evaluations':
+                 # Evaluations matrix needs even more space to prevent text overlap
+                 fig_size = max(16, dim_count * 5) 
+             else:
+                 # Increased multiplier and base size for objective plots
+                 fig_size = max(12, dim_count * 4)
              plt.figure(figsize=(fig_size, fig_size))
         else:
              # Increased standard plot size
