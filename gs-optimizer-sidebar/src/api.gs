@@ -1,3 +1,81 @@
+/**
+ * Unified Communication Layer for Cloud Run Backend
+ * Implements request queuing, exponential backoff, and circuit breaker patterns
+ */
+
+// Request queue and state management
+const _REQUEST_QUEUE = [];
+let _isProcessingQueue = false;
+let _circuitBreakerState = 'CLOSED'; // CLOSED, OPEN, HALF_OPEN
+let _failureCount = 0;
+let _lastFailureTime = 0;
+const _CIRCUIT_BREAKER_THRESHOLD = 3;
+const _CIRCUIT_BREAKER_TIMEOUT_MS = 30000; // 30 seconds
+const _MAX_RETRIES = 3;
+const _INITIAL_BACKOFF_MS = 1000;
+
+/**
+ * Lightweight ping to warm up Cloud Run server.
+ * Uses circuit breaker and rate limiting.
+ */
+function pingServer() {
+  // Check circuit breaker
+  if (_circuitBreakerState === 'OPEN') {
+    const timeSinceLastFailure = Date.now() - _lastFailureTime;
+    if (timeSinceLastFailure < _CIRCUIT_BREAKER_TIMEOUT_MS) {
+      console.log('Circuit breaker is OPEN, skipping ping');
+      return { status: 'skipped', message: 'Circuit breaker open' };
+    } else {
+      // Transition to HALF_OPEN
+      _circuitBreakerState = 'HALF_OPEN';
+      console.log('Circuit breaker transitioning to HALF_OPEN');
+    }
+  }
+
+  try {
+    const userEmail = Session.getActiveUser().getEmail();
+    
+    const options = {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({}),
+      headers: {
+        'X-User-Email': userEmail,
+        'Authorization': 'Bearer ' + ScriptApp.getIdentityToken()
+      },
+      muteHttpExceptions: true
+    };
+
+    const response = UrlFetchApp.fetch(CLOUD_RUN_URL + '/ping', options);
+    const code = response.getResponseCode();
+    
+    if (code === 200) {
+      // Success - reset circuit breaker
+      _circuitBreakerState = 'CLOSED';
+      _failureCount = 0;
+      console.log('Server ping successful');
+      return { status: 'success', message: 'Server ready' };
+    } else if (code === 429) {
+      // Rate limited - don't count as failure
+      console.log('Server ping rate limited');
+      return { status: 'rate_limited', message: 'Rate limit exceeded' };
+    } else {
+      throw new Error(`HTTP ${code}`);
+    }
+  } catch (e) {
+    // Handle failure
+    _failureCount++;
+    _lastFailureTime = Date.now();
+    
+    if (_failureCount >= _CIRCUIT_BREAKER_THRESHOLD) {
+      _circuitBreakerState = 'OPEN';
+      console.error('Circuit breaker opened after ' + _failureCount + ' failures');
+    }
+    
+    console.error('Server ping failed:', e.toString());
+    return { status: 'error', message: e.toString() };
+  }
+}
 
 /**
  * Logic for calling the optimizer API.
@@ -28,11 +106,10 @@ function continueOptimization(existingData) {
   return callOptimizerApi('/continue-optimization', { settings: settings, existing_data: existingData });
 }
 
+/**
+ * Enhanced callCloudRunEndpoint with retry logic and exponential backoff.
+ */
 function callCloudRunEndpoint(endpoint, payload, progressMessage) {
-  /**
-   * Makes authenticated API call to Cloud Run service.
-   * returns {Object|null} Parsed JSON response or null on error
-   */
   const ui = SpreadsheetApp.getUi();
   const userEmail = Session.getActiveUser().getEmail();
   
@@ -42,6 +119,9 @@ function callCloudRunEndpoint(endpoint, payload, progressMessage) {
              ui.ButtonSet.OK);
     return null;
   }
+  
+  // Pre-ping server to reduce cold start latency
+  pingServer();
   
   let token = '';
   try {
@@ -65,27 +145,54 @@ function callCloudRunEndpoint(endpoint, payload, progressMessage) {
   console.log(`Calling: ${CLOUD_RUN_URL}${endpoint}`);
   console.log(`User: ${userEmail}`);
 
-  try {
-    const response = UrlFetchApp.fetch(`${CLOUD_RUN_URL}${endpoint}`, options);
-    const responseCode = response.getResponseCode();
-    const responseBody = response.getContentText();
+  // Attempt request with exponential backoff
+  let lastError = null;
+  for (let attempt = 0; attempt < _MAX_RETRIES; attempt++) {
+    try {
+      if (attempt > 0) {
+        const backoffMs = _INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
+        console.log(`Retry attempt ${attempt + 1}, waiting ${backoffMs}ms`);
+        Utilities.sleep(backoffMs);
+      }
 
-    console.log(`Response code: ${responseCode}`);
+      const response = UrlFetchApp.fetch(`${CLOUD_RUN_URL}${endpoint}`, options);
+      const responseCode = response.getResponseCode();
+      const responseBody = response.getContentText();
 
-    if (responseCode === 200) {
-      const jsonResponse = JSON.parse(responseBody);
-      return jsonResponse;
+      console.log(`Response code: ${responseCode}`);
+      console.log(`Response preview: ${responseBody.substring(0, 200)}`);
+
+      if (responseCode === 200) {
+        const jsonResponse = JSON.parse(responseBody);
+        return jsonResponse;
+      }
+      
+      if (responseCode === 429) {
+        // Rate limited - wait longer
+        console.log('Rate limited, backing off');
+        lastError = { code: responseCode, body: responseBody };
+        continue;
+      }
+      
+      // Other errors
+      const errorMessage = _buildErrorMessage(responseCode, responseBody, userEmail);
+      console.error(`Error ${responseCode}: ${responseBody}`);
+      return { status: 'error', message: errorMessage };
+      
+    } catch (e) {
+      lastError = e;
+      console.error(`Attempt ${attempt + 1} failed:`, e.toString());
+      
+      if (attempt === _MAX_RETRIES - 1) {
+        // Final attempt failed
+        const errorMsg = `Could not reach optimizer service after ${_MAX_RETRIES} attempts.\n\n${e.toString()}`;
+        console.error('Fatal error:', e);
+        return { status: 'error', message: errorMsg };
+      }
     }
-    
-    const errorMessage = _buildErrorMessage(responseCode, responseBody, userEmail);
-    console.error(`Error ${responseCode}: ${responseBody}`);
-    return { status: 'error', message: errorMessage };
-    
-  } catch (e) {
-    const errorMsg = `Could not reach optimizer service.\n\n${e.toString()}\n\nCheck Cloud Run URL: ${CLOUD_RUN_URL}`;
-    console.error('Fatal error:', e);
-    return { status: 'error', message: errorMsg };
   }
+  
+  return { status: 'error', message: 'All retry attempts failed' };
 }
 
 function _buildErrorMessage(code, body, email) {

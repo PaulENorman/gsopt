@@ -200,6 +200,79 @@
     </div>
 
     <script>
+        // ========================================
+        // THROTTLING & DEBOUNCING UTILITIES
+        // ========================================
+        
+        let pingDebounceTimer = null;
+        let lastPingTime = 0;
+        const PING_DEBOUNCE_MS = 500;  // Mouse activity debounce
+        const PING_MIN_INTERVAL_MS = 3000;  // Minimum time between actual pings
+        let isPinging = false;
+        
+        /**
+         * Debounced server ping to warm up Cloud Run instance.
+         * Triggered by mouse activity but throttled to prevent spam.
+         */
+        function debouncedServerPing() {
+            // Clear existing timer
+            if (pingDebounceTimer) {
+                clearTimeout(pingDebounceTimer);
+            }
+            
+            // Set new debounce timer
+            pingDebounceTimer = setTimeout(() => {
+                const now = Date.now();
+                
+                // Check if enough time has passed since last ping
+                if (now - lastPingTime < PING_MIN_INTERVAL_MS) {
+                    return;
+                }
+                
+                // Avoid concurrent pings
+                if (isPinging) {
+                    return;
+                }
+                
+                isPinging = true;
+                lastPingTime = now;
+                
+                google.script.run
+                    .withSuccessHandler(() => {
+                        isPinging = false;
+                        console.log('Server ping successful');
+                    })
+                    .withFailureHandler((err) => {
+                        isPinging = false;
+                        console.log('Server ping failed:', err);
+                    })
+                    .pingServer();
+            }, PING_DEBOUNCE_MS);
+        }
+        
+        /**
+         * Attach mouse activity listeners for proactive server wake-up
+         */
+        function attachActivityListeners() {
+            // Listen for mouse movement over interactive elements
+            const interactiveElements = document.querySelectorAll('button, select, input');
+            
+            interactiveElements.forEach(element => {
+                element.addEventListener('mouseenter', debouncedServerPing);
+            });
+            
+            // Also ping when sidebar becomes visible/active
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    debouncedServerPing();
+                }
+            });
+        }
+        
+        // ========================================
+        // EXISTING FUNCTIONS
+        // ========================================
+        
         function toggleSection(id) {
             document.getElementById(id).classList.toggle('collapsed');
         }
@@ -218,6 +291,12 @@
             google.script.run
                 .withSuccessHandler(populateSettings)
                 .getInitialSettings();
+            
+            // Attach activity listeners for proactive pinging
+            attachActivityListeners();
+            
+            // Initial ping on sidebar load
+            debouncedServerPing();
         };
 
         function populateSettings(s) {
@@ -268,6 +347,10 @@
         function askForInitPoints() {
             const settings = collectSettings();
             setLoading(true);
+            
+            // Ping server before heavy operation
+            google.script.run.pingServer();
+            
             google.script.run
                 .withSuccessHandler(r => { setLoading(false); showMessage(r); })
                 .withFailureHandler(err => { setLoading(false); showMessage({status: 'error', message: err}); })
@@ -277,6 +360,10 @@
         function tellAsk() {
             const settings = collectSettings();
             setLoading(true);
+            
+            // Ping server before heavy operation
+            google.script.run.pingServer();
+            
             google.script.run
                 .withSuccessHandler(r => { setLoading(false); showMessage(r); })
                 .withFailureHandler(err => { setLoading(false); showMessage({status: 'error', message: err}); })

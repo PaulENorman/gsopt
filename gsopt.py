@@ -19,6 +19,8 @@ It uses a wrapper around the `scikit-optimize` library to perform the optimizati
 from dataclasses import dataclass
 from typing import Dict, List, Any, Optional, Tuple
 import os
+import time
+from collections import defaultdict
 
 import jwt
 import numpy as np
@@ -28,6 +30,31 @@ from utils import setup_logging, authenticate_request
 
 logger = setup_logging(__name__)
 app = Flask(__name__)
+
+# Rate limiting storage (in-memory)
+_rate_limit_storage: Dict[str, List[float]] = defaultdict(list)
+_RATE_LIMIT_WINDOW = 60  # seconds
+_RATE_LIMIT_MAX_REQUESTS = 10
+
+def check_rate_limit(email: str) -> Tuple[bool, str]:
+    """
+    Check if user has exceeded rate limit for ping requests.
+    Returns (is_allowed, message)
+    """
+    now = time.time()
+    window_start = now - _RATE_LIMIT_WINDOW
+    
+    # Clean old entries
+    _rate_limit_storage[email] = [
+        ts for ts in _rate_limit_storage[email] 
+        if ts > window_start
+    ]
+    
+    if len(_rate_limit_storage[email]) >= _RATE_LIMIT_MAX_REQUESTS:
+        return False, f"Rate limit exceeded: max {_RATE_LIMIT_MAX_REQUESTS} requests per {_RATE_LIMIT_WINDOW}s"
+    
+    _rate_limit_storage[email].append(now)
+    return True, "OK"
 
 # Lazy loading variables
 _matplotlib_loaded = False
@@ -287,6 +314,30 @@ def test_connection() -> Tuple[Any, int]:
         "message": f"Connection verified for {email}. Build: {commit_sha}",
         "authenticated_user": email,
         "commit_sha": commit_sha
+    }), 200
+
+
+@app.route('/ping', methods=['POST'])
+def ping() -> Tuple[Any, int]:
+    """
+    Lightweight ping endpoint to wake up the server without heavy library imports.
+    Used for proactive server warm-up from client interactions.
+    """
+    is_valid, email, error_msg = authenticate_request(request)
+    if not is_valid:
+        return jsonify({"status": "error", "message": error_msg}), 403
+    
+    # Check rate limit
+    is_allowed, rate_msg = check_rate_limit(email)
+    if not is_allowed:
+        logger.warning(f"Rate limit exceeded for {email}")
+        return jsonify({"status": "error", "message": rate_msg}), 429
+    
+    logger.info(f"Ping received from: {email}")
+    return jsonify({
+        "status": "success",
+        "message": "Server is ready",
+        "timestamp": time.time()
     }), 200
 
 
