@@ -12,10 +12,11 @@ The key functions are:
 """
 
 import logging
-from typing import Tuple, Optional
-
 import jwt
+from jwt import PyJWKClient
 from flask import Request
+from typing import Tuple
+import os
 
 # The URL for Google's public keys, used for verifying JWTs.
 # While not used for strict verification in this implementation, it's good practice.
@@ -43,98 +44,67 @@ def setup_logging(name: str) -> logging.Logger:
     return logging.getLogger(name)
 
 
-def authenticate_request(request: Request) -> Tuple[bool, Optional[str], Optional[str]]:
+def authenticate_request(request: Request) -> Tuple[bool, str, str]:
     """
-    Authenticates an incoming request and ensures the user has a Gmail account.
-
-    This function checks for user identity in a prioritized order of sources:
-    1.  `X-User-Email`: A custom header expected from the Google Apps Script client.
-    2.  `X-Goog-Authenticated-User-Email`: A header injected by Google Cloud Run's
-        Identity-Aware Proxy (IAP).
-    3.  `Authorization: Bearer <token>`: A standard JWT Bearer token.
-
-    Access is restricted to users with a `@gmail.com` email address.
+    Authenticates incoming requests using Google's OIDC tokens.
     
-    Args:
-        request: The incoming Flask request object.
-        
     Returns:
-        A tuple containing:
-        - A boolean indicating if authentication was successful.
-        - The authenticated user's email, if successful.
-        - An error message, if authentication failed.
+        (is_valid, email, error_message)
     """
-    logger = logging.getLogger(__name__)
+    # Get email from header
+    email = request.headers.get('X-User-Email', '')
     
-    # 1. Check for the custom header from Apps Script.
-    user_email = request.headers.get('X-User-Email')
-    if user_email:
-        return _validate_gmail(user_email, "custom header", logger)
+    # Require Gmail accounts only
+    if not email or not email.endswith('@gmail.com'):
+        return False, '', f'Invalid email domain. Only @gmail.com accounts are allowed. Received: {email}'
     
-    # 2. Check for the header from Google Cloud Run's IAP.
-    authenticated_email = request.headers.get('X-Goog-Authenticated-User-Email')
-    if authenticated_email:
-        # The header value is prefixed with "accounts.google.com:", which needs to be removed.
-        if authenticated_email.startswith('accounts.google.com:'):
-            authenticated_email = authenticated_email.replace('accounts.google.com:', '')
-        return _validate_gmail(authenticated_email, "Cloud Run header", logger)
-    
-    # 3. Fallback to checking for a JWT Bearer token.
+    # Get authorization token
     auth_header = request.headers.get('Authorization', '')
-    if auth_header.startswith('Bearer '):
-        token = auth_header.split('Bearer ')[1]
-        return _validate_jwt_token(token, logger)
+    if not auth_header.startswith('Bearer '):
+        return False, '', 'Missing or invalid Authorization header'
     
-    logger.warning("Authentication failed: No valid credentials found in headers.")
-    logger.debug(f"Headers checked: X-User-Email, X-Goog-Authenticated-User-Email, Authorization")
-    return False, None, "Authentication required. Provide a valid credential (e.g., X-User-Email header)."
-
-
-def _validate_gmail(email: str, source: str, logger: logging.Logger) -> Tuple[bool, Optional[str], Optional[str]]:
-    """
-    A helper function to validate that an email address is from the '@gmail.com' domain.
+    token = auth_header.replace('Bearer ', '')
     
-    Args:
-        email: The email address to validate.
-        source: A string indicating where the email was sourced from (for logging).
-        logger: The logger instance to use for logging messages.
-        
-    Returns:
-        A tuple (is_valid, email, error_message).
-    """
-    if not email.endswith('@gmail.com'):
-        logger.warning(f"Access denied for non-Gmail account from {source}: {email}")
-        return False, None, f"Access denied: Must use a Gmail account. Received: {email}"
-    
-    logger.info(f"Successfully authenticated user via {source}: {email}")
-    return True, email, None
-
-
-def _validate_jwt_token(token: str, logger: logging.Logger) -> Tuple[bool, Optional[str], Optional[str]]:
-    """
-    Decodes a JWT token to extract the user's email and validates if it's a Gmail account.
-    
-    Note: This implementation performs a "lazy" validation by decoding the token
-    without verifying its cryptographic signature. In a production environment with
-    untrusted clients, full signature verification against Google's public keys
-    would be necessary.
-    
-    Args:
-        token: The JWT token string.
-        logger: The logger instance.
-        
-    Returns:
-        A tuple (is_valid, email, error_message).
-    """
     try:
-        # Decode the token without signature verification to inspect its claims.
-        unverified_claims = jwt.decode(token, options={"verify_signature": False})
-        email = unverified_claims.get('email') or unverified_claims.get('sub')
+        # Verify the JWT token with Google's public keys
+        jwks_url = 'https://www.googleapis.com/oauth2/v3/certs'
+        jwks_client = PyJWKClient(jwks_url)
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
         
-        if email:
-            return _validate_gmail(email, "JWT token", logger)
-            
-    except jwt.PyJWTError as e:
-        logger.warning(f"Failed to decode JWT token: {e}")
-    
-    return False, None, "Invalid or malformed JWT token."
+        # Decode and validate
+        decoded = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=['RS256'],
+            audience=os.environ.get('CLOUD_RUN_SERVICE_URL', ''),
+            options={
+                'verify_exp': True,
+                'verify_aud': True,
+                'verify_iss': True
+            }
+        )
+        
+        # Verify the email in the token matches the header
+        token_email = decoded.get('email', '')
+        if token_email != email:
+            return False, '', f'Email mismatch: header={email}, token={token_email}'
+        
+        # Verify the token is from Google
+        valid_issuers = ['https://accounts.google.com', 'accounts.google.com']
+        if decoded.get('iss') not in valid_issuers:
+            return False, '', f'Invalid token issuer: {decoded.get("iss")}'
+        
+        return True, email, ''
+        
+    except jwt.ExpiredSignatureError:
+        return False, '', 'Token has expired'
+    except jwt.InvalidAudienceError:
+        return False, '', 'Invalid token audience'
+    except jwt.InvalidIssuerError:
+        return False, '', 'Invalid token issuer'
+    except jwt.InvalidTokenError as e:
+        return False, '', f'Invalid token: {str(e)}'
+    except Exception as e:
+        # Log but don't expose internal errors to client
+        logging.error(f'Authentication error: {str(e)}')
+        return False, '', 'Authentication failed'

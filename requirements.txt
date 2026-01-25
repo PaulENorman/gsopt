@@ -2,6 +2,7 @@
 Flask
 gunicorn
 requests
+flask-talisman==1.1.0  # HTTPS enforcement and security headers
 
 # Data processing and optimization
 numpy
@@ -14,4 +15,7 @@ PyJWT[crypto]
 
 # Testing and plotting
 matplotlib
+
+# Security
+python-dotenv==1.0.0   # Secure environment variable management
 

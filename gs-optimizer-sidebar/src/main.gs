@@ -38,14 +38,6 @@ function getInitialSettings() {
   return readOptimizerSettings();
 }
 
-// Sheet and cell constants
-const SETTINGS_SHEET_NAME = 'Settings';
-const DATA_SHEET_NAME = 'Data';
-const NUM_PARAMS_CELL = 'B2';
-const OBJECTIVE_NAME_CELL = 'B3';
-const PARAM_CONFIG_START_ROW = 6;
-const DATA_START_ROW = 2;
-
 // Edit event batching
 let _editBatchTimer = null;
 const EDIT_BATCH_DELAY_MS = 2000; // 2 seconds
