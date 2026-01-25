@@ -108,7 +108,7 @@ function showSkoptPlotDialog(plotType, title) {
       </head>
       <body>
         <div id="loader" class="loader"></div>
-        <div id="status">Generating ${title}...<br><span style="font-size:0.8em; color:#888;">This may take a moment for complex models.</span></div>
+        <div id="status">Generating ${title}...<br><span style="font-size:0.8em; color:#888;">This may take a moment</span></div>
         <img id="plotImage" />
         <script>
           window.onload = function() {
