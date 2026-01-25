@@ -32,7 +32,7 @@ The Google Sheet acts as the central hub, storing all experimental data, providi
 
 ### Make a Copy of the Sheet
 
-![Make a Copy]({{ '/images/howto0_saveacopy.jpg' | relative_url }})
+<img src="{{ '/images/howto0_saveacopy.jpg' | relative_url }}" alt="Make a Copy" width="400">
 
 To use GSOpt, first save a copy of the template to your own Google Drive:
 - Open the template sheet, then go to File → Make a copy.
@@ -40,13 +40,13 @@ To use GSOpt, first save a copy of the template to your own Google Drive:
 
 ### Opening the Sidebar
 
-![Top Menu]({{ '/images/howto1_top_menu.jpg' | relative_url }})
+<img src="{{ '/images/howto1_top_menu.jpg' | relative_url }}" alt="Top Menu" width="800">
 
 To begin, click Extensions → GSOpt → Open Sidebar from the top menu to open the optimization sidebar.
 
 ### Sheet Tabs Overview
 
-![Sheet Tabs]({{ '/images/howto2_tabs.jpg' | relative_url }})
+<img src="{{ '/images/howto2_tabs.jpg' | relative_url }}" alt="Sheet Tabs" width="600">
 
 The workbook contains three main tabs:
 * **Data**: Where you enter your experimental results and view all optimization runs.
@@ -55,7 +55,7 @@ The workbook contains three main tabs:
 
 ### Optimizer Settings
 
-![Optimizer Settings]({{ '/images/howto3_optimizer_settings.jpg' | relative_url }})
+<img src="{{ '/images/howto3_optimizer_settings.jpg' | relative_url }}" alt="Optimizer Settings" width="400">
 
 The sidebar provides controls for configuring the optimization algorithm:
 * **Base Estimator (Regressor)**: Choose the surrogate model (`GP`, `RF`, `ET`, or `GBRT`). See [The Optimizer](#the-optimizer) section for details.
@@ -69,7 +69,7 @@ For recommendations on which settings to use, see [Recommendations and Examples]
 
 ### Optimizer Controls
 
-![Optimizer Controls]({{ '/images/howto4_optimizer_controls_plots.jpg' | relative_url }})
+<img src="{{ '/images/howto4_optimizer_controls_plots.jpg' | relative_url }}" alt="Optimizer Controls" width="400">
 
 Use the sidebar buttons to control the optimization process:
 * **Initialize**: Generates the initial batch of random points to begin optimization.
@@ -79,43 +79,43 @@ Use the sidebar buttons to control the optimization process:
 
 ### Entering Data After Initialization
 
-![Data Post-Initialization]({{ '/images/howto5_data_post_init.jpg' | relative_url }})
+<img src="{{ '/images/howto5_data_post_init.jpg' | relative_url }}" alt="Data Post-Initialization" width="500">
 
 After clicking Initialize, the optimizer will populate the Data sheet with initial parameter combinations to test. Enter the results in the Objective column after running your experiments. In-sheet charts on the Analysis tab will update automatically.
 
 ### Entering Data After Ask
 
-![Data Post-Ask]({{ '/images/howto6_data_post_ask.jpg' | relative_url }})
+<img src="{{ '/images/howto6_data_post_ask.jpg' | relative_url }}" alt="Data Post-Ask" width="500">
 
 After clicking Ask, new parameter combinations will be added to the Data sheet. Run your experiments and enter the objective values. Repeat the Ask → Experiment → Enter Data cycle to continue optimization.
 
 ### Convergence Plot
 
-![Convergence Plot]({{ '/images/howto7_convergence_plot.jpg' | relative_url }})
+<img src="{{ '/images/howto7_convergence_plot.jpg' | relative_url }}" alt="Convergence Plot" width="700">
 
 Shows the best objective value found over iterations. For minimization problems, it should generally decrease as better solutions are found.
 
 ### Evaluations Matrix
 
-![Evaluations Matrix]({{ '/images/howto8_evaluations_matrix.jpg' | relative_url }})
+<img src="{{ '/images/howto8_evaluations_matrix.jpg' | relative_url }}" alt="Evaluations Matrix" width="600">
 
 Visualizes sampling locations in parameter space. Over time, you should see clustering around promising regions.
 
 ### Objective Partial Dependence
 
-![Partial Dependence Plots]({{ '/images/howto9_parttial_dependence_plot.jpg' | relative_url }})
+<img src="{{ '/images/howto9_parttial_dependence_plot.jpg' | relative_url }}" alt="Partial Dependence Plots" width="700">
 
 Shows how the modeled objective varies with each parameter while marginalizing over the others. See the [scikit-optimize documentation](https://scikit-optimize.github.io/stable/modules/plots.html#skopt.plots.plot_objective).
 
 ### Parallel Coordinate Plots
 
-![Parallel Coordinate Plots]({{ '/images/howto10_parallel coordinates_plot.jpg' | relative_url }})
+<img src="{{ '/images/howto10_parallel coordinates_plot.jpg' | relative_url }}" alt="Parallel Coordinate Plots" width="800">
 
 Provides a multi-axis view of parameters and objective values.
 
 ### Parameter Settings
 
-![Parameter Settings]({{ '/images/howto12_paramter_settings.jpg' | relative_url }})
+<img src="{{ '/images/howto12_paramter_settings.jpg' | relative_url }}" alt="Parameter Settings" width="700">
 
 Configure your optimization problem:
 * **Parameter Names**: Provide meaningful names.
@@ -193,13 +193,13 @@ The results were generated with the following settings to simulate a realistic u
 
 The following plot compares the performance of different surrogate models (regressors) on the Rosenbrock function, a classic difficult non-convex problem. All optimizers used the `gp_hedge` acquisition function. The `SKOPT-GP` (Gaussian Process) model consistently finds a better solution faster than the tree-based methods.
 
-![Rosenbrock Regressor Comparison]({{ '/images/test_results/rosenbrock_regressor_comparison.png' | relative_url }})
+<img src="{{ '/images/test_results/rosenbrock_regressor_comparison.png' | relative_url }}" alt="Rosenbrock Regressor Comparison" width="800">
 
 #### Acquisition Function Performance
 
 This plot compares different acquisition functions for the `SKOPT-GP` optimizer on the Ackley function, which has many local minima. The `gp_hedge` strategy shows strong, consistent performance. `LCB` with a high kappa (`k=4.0`) is also effective at exploring, while `LCB` with a low kappa (`k=0.5`) exploits more and converges slower on this particular problem.
 
-![Ackley Acquisition Function Comparison]({{ '/images/test_results/ackley_acq_func_comparison.png' | relative_url }})
+<img src="{{ '/images/test_results/ackley_acq_func_comparison.png' | relative_url }}" alt="Ackley Acquisition Function Comparison" width="800">
 
 ---
 

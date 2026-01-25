@@ -317,7 +317,7 @@ def generate_plot() -> Tuple[Any, int]:
                 plt.title(f"Convergence Plot{suffix}")
             elif plot_type == 'evaluations':
                 plot_evaluations(res, bins=10)
-                plt.suptitle(f"Evaluations Matrix{suffix}", fontsize=16)
+                # Remove title for cleaner look
             elif plot_type == 'objective':
                 # plot_objective requires the models to be fitted.
                 # Since we called tell() in build_optimizer, the last model in res.models should be valid.
@@ -328,7 +328,9 @@ def generate_plot() -> Tuple[Any, int]:
              return jsonify({"status": "error", "message": f"Error creating {plot_type}: {str(plot_err)}"}), 500
         
         buf = io.BytesIO()
-        plt.savefig(buf, format='png', bbox_inches='tight')
+        # Increase DPI for better resolution, especially for evaluations matrix
+        dpi = 150 if plot_type == 'evaluations' else 100
+        plt.savefig(buf, format='png', bbox_inches='tight', dpi=dpi)
         buf.seek(0)
         img_base64 = base64.b64encode(buf.read()).decode('utf-8')
         plt.close('all')
