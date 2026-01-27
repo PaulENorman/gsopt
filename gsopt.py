@@ -207,7 +207,7 @@ def init_optimization() -> Tuple[Any, int]:
         if not settings_data:
             return jsonify({"status": "error", "message": "settings are required"}), 400
 
-        logger.info(f"Initializing optimization for user: {email}")
+        logger.info("Initializing optimization")
         
         settings = OptimizerSettings.from_dict(settings_data)
         optimizer = build_optimizer(settings)
@@ -252,13 +252,10 @@ def continue_optimization() -> Tuple[Any, int]:
         if not settings_data:
             return jsonify({"status": "error", "message": "settings are required"}), 400
 
-        logger.info(f"Continuing optimization for user: {email}")
+        logger.info("Continuing optimization")
         logger.info(f"Received {len(existing_data)} data points from client")
         
         settings = OptimizerSettings.from_dict(settings_data)
-        
-        if existing_data:
-            logger.info(f"Sample data point: {existing_data[0]}")
         
         optimizer = build_optimizer(settings, existing_data)
         
@@ -268,12 +265,6 @@ def continue_optimization() -> Tuple[Any, int]:
             new_points = [new_points]
             
         logger.info(f"Generated {len(new_points)} new points")
-        
-        for i, point in enumerate(new_points):
-            try:
-                logger.debug(f"New point {i}: {[f'{val:.4f}' for val in point]}")
-            except (TypeError, ValueError):
-                logger.debug(f"New point {i}: {point}")
         
         result_data = format_points_response(new_points, settings.param_names)
         
@@ -299,7 +290,7 @@ def test_connection() -> Tuple[Any, int]:
 
     commit_sha = os.environ.get('COMMIT_SHA') or os.environ.get('K_REVISION') or 'development'
     
-    logger.info(f"Connection test successful for: {email} (Build: {commit_sha})")
+    logger.info(f"Connection test successful (Build: {commit_sha})")
     return jsonify({
         "status": "success",
         "message": f"Connection verified for {email}. Build: {commit_sha}",
@@ -320,10 +311,10 @@ def ping() -> Tuple[Any, int]:
     
     is_allowed, rate_msg = check_rate_limit(email)
     if not is_allowed:
-        logger.warning(f"Rate limit exceeded for {email}")
+        logger.warning("Rate limit exceeded")
         return jsonify({"status": "error", "message": rate_msg}), 429
     
-    logger.info(f"Ping received from: {email}")
+    logger.info("Ping received")
     return jsonify({
         "status": "success",
         "message": "Server is ready",

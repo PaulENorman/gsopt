@@ -109,7 +109,6 @@ class SkoptBayesianOptimizer:
             return
         
         logger.info(f"Training optimizer with {len(x_data)} new points.")
-        logger.info(f"Objective stats: min={min(y_data):.4f}, max={max(y_data):.4f}, mean={np.mean(y_data):.4f}")
         
         self.optimizer.tell(x_data, y_data)
     
@@ -152,7 +151,6 @@ def parse_training_data(
             y_value = float(row['objective'])
             x_train.append(x_point)
             y_train.append(y_value)
-            logger.debug(f"Added point {i}: params={x_point}, objective={y_value}")
         except (ValueError, TypeError, KeyError) as e:
             logger.warning(f"Skipping invalid data point at index {i}: {row}. Reason: {e}")
             continue

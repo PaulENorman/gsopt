@@ -11,7 +11,7 @@ This Privacy Policy describes how your information is handled when you use the G
 ## 1. Data Collection and Storage
 The Service is designed to be **stateless**. We do not store, retain, or harvest any data sent to our API. 
 - **Optimization Data:** All parameter configurations and objective values reside exclusively within your Google Sheet.
-- **Processing:** Data sent to the Cloud Run service is processed in-memory to generate optimization suggestions and is immediately discarded after the response is sent.
+- **Processing:** Data sent to the Cloud Run service is processed in-memory to generate optimization suggestions and is immediately discarded after the response is sent. No data is kept in the logs.
 
 ## 2. Authentication and Identity
 The Service uses your Google account email address solely for authentication and access control. 

@@ -22,7 +22,6 @@ def setup_request_logging(app):
                 f"path={request.path} "
                 f"status={response.status_code} "
                 f"duration={elapsed:.3f}s "
-                f"user={request.headers.get('X-User-Email', 'unknown')} "
                 f"request_id={g.request_id}"
             )
         return response
