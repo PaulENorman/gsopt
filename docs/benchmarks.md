@@ -19,12 +19,13 @@ The results were generated with the following settings to simulate a realistic u
 
 ## Regressor Performance
 
-The following plot compares the performance of different surrogate models (regressors) on the Rosenbrock function, a classic difficult non-convex problem. All optimizers used the `gp_hedge` acquisition function. The `SKOPT-GP` (Gaussian Process) model consistently finds a better solution faster than the tree-based methods.
-
+The following plot compares the performance of different surrogate models (regressors) on the Rosenbrock function, a classic difficult non-convex problem. All optimizers used the `gp_hedge` acquisition function. The `SKOPT-GP` (Gaussian Process) finds the lowest minimum at the end of the two hundred iterations, although it underperforms early on.
 <img src="{{ '/images/test_results/rosenbrock_regressor_comparison.png' | relative_url }}" alt="Rosenbrock Regressor Comparison" width="800">
 
 ## Acquisition Function Performance
 
-This plot compares different acquisition functions for the `SKOPT-GP` optimizer on the Ackley function, which has many local minima. The `gp_hedge` strategy shows strong, consistent performance. `LCB` with a high kappa (`k=4.0`) is also effective at exploring, while `LCB` with a low kappa (`k=0.5`) exploits more and converges slower on this particular problem.
+This plot compares different acquisition functions for the `SKOPT-GP` optimizer on the Ackley function, which has many local minima. The `gp_hedge` strategy shows strong, consistent performance, while the LCB with both high and low kappas also perform well.
 
 <img src="{{ '/images/test_results/ackley_acq_func_comparison.png' | relative_url }}" alt="Ackley Acquisition Function Comparison" width="800">
+
+For recommended starting settings, GP is recommended as an acquisition function, with gp_hedge as the acquisition function. If your problem probably only has one local minimum and you are looking find it quickly, LCB with a k = 0.5 is a good choice.
