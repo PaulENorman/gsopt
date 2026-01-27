@@ -17,9 +17,7 @@ nav_order: 1
 
 ---
 
-Find the latest version here:
-
-https://docs.google.com/spreadsheets/d/1Xs2LGaf5fzxu043lmcaqPNkR07QLZ1kt4yNoX34BwVo/edit?usp=sharing
+Find the latest version [here](https://docs.google.com/spreadsheets/d/1Xs2LGaf5fzxu043lmcaqPNkR07QLZ1kt4yNoX34BwVo/edit?usp=sharing).
 
 
 ## Overview
