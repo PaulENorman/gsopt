@@ -17,6 +17,11 @@ nav_order: 1
 
 ---
 
+Find the latest version here:
+
+https://docs.google.com/spreadsheets/d/1Xs2LGaf5fzxu043lmcaqPNkR07QLZ1kt4yNoX34BwVo/edit?usp=sharing
+
+
 ## Overview
 
 Optimizing real-world engineering problems is often challenging. When the function you want to optimize is expensive, noisy, and lacks a simple mathematical form (aka "black box", with no information on the derivatives of the function), many traditional methods fall short. GSOpt is designed for this type of problem by implementing a human-in-the-loop batched submission optimization workflow for noisy black box problems. The optimization process is orchestrated through a Google Sheet, so it’s easy to use for engineers.
