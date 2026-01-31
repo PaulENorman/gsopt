@@ -19,7 +19,7 @@ It uses a wrapper around the `scikit-optimize` library to perform the optimizati
 import time
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
-
+import os
 import numpy as np
 from flask import Flask, request, jsonify
 

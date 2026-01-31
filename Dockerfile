@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.4
+
 # Stage 1: Builder
 # This stage installs dependencies.
 FROM python:3.12-slim as builder
@@ -12,20 +14,23 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Install only necessary build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    build-essential
 
 # Create virtual environment
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Upgrade pip first
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+# Upgrade pip first with pip cache mount
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip setuptools wheel
 
-# Copy and install requirements
+# Copy and install requirements with pip cache mount
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
 # --- Final Stage ---
 FROM python:3.12-slim
 

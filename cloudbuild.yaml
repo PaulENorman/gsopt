@@ -1,6 +1,8 @@
 steps:
   # Build with BuildKit and inline cache
   - name: 'gcr.io/cloud-builders/docker'
+    env:
+      - 'DOCKER_BUILDKIT=1'
     args:
       - 'build'
       - '--build-arg'
