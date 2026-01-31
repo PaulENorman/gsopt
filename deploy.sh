@@ -12,10 +12,4 @@ gcloud run deploy $SERVICE_NAME \
   --region $REGION \
   --no-allow-unauthenticated
 
-echo "🔐 Updating IAM policy for public access..."
-gcloud run services add-iam-policy-binding $SERVICE_NAME \
-  --region $REGION \
-  --member="allUsers" \
-  --role="roles/run.invoker"
-
 echo "✅ Success!"
