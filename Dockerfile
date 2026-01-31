@@ -21,12 +21,13 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Upgrade pip first with cache mount
-RUN --mount=type=ca
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # Copy and install requirements
 COPY requirements.txt .
-RUN pip install --no-cache-dir
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir -r requirements.txt
 # --- Final Stage ---
 FROM python:3.12-slim
 
