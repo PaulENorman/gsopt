@@ -1,25 +1,26 @@
 steps:
   # Build with BuildKit and inline cache
   - name: 'gcr.io/cloud-builders/docker'
-    env:
-      - 'DOCKER_BUILDKIT=1'
     args:
-      - 'buildx'
       - 'build'
       - '--build-arg'
       - 'BUILDKIT_INLINE_CACHE=1'
       - '--build-arg'
       - 'COMMIT_SHA=$SHORT_SHA'
       - '--cache-from'
-      - 'type=registry,ref=europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/gsopt:latest'
-      - '--cache-to'
-      - 'type=inline'
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/gsopt:latest'
       - '-t'
       - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/gsopt:$SHORT_SHA'
       - '-t'
       - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/gsopt:latest'
-      - '--push'
       - '.'
+
+  # Push images
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '--all-tags'
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/gsopt'
 
   # Deploy container image to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
