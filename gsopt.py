@@ -16,6 +16,7 @@ The application is structured to be stateless, meaning that all necessary inform
 It uses a wrapper around the `scikit-optimize` library to perform the optimization.
 """
 
+import time
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
