@@ -39,7 +39,7 @@ WORKDIR /app
 
 # Build Argument for Versioning - remove default to make it required
 ARG COMMIT_SHA
-ENV COMMIT_SHA=${COMMIT_SHA:-development} \
+ENV COMMIT_SHA=${COMMIT_SHA} \
     PATH="/opt/venv/bin:$PATH"
 
 # Copy the virtual environment from the builder stage
