@@ -5,12 +5,8 @@ PROJECT_ID="gsopt-478412"
 REGION="europe-west1"
 SERVICE_NAME="gsopt"
 
-echo "🚀 Deploying to Cloud Run..."
-gcloud run deploy $SERVICE_NAME \
-  --source . \
-  --dockerfile Dockerfile \
-  --region $REGION \
-  --no-allow-unauthenticated \
-  --quiet
+echo "🚀 Deploying to Cloud Run with BuildKit optimization..."
+# Use Cloud Build with cloudbuild.yaml to enable BuildKit caching
+gcloud builds submit --config cloudbuild.yaml --region $REGION .
 
 echo "✅ Success!"
