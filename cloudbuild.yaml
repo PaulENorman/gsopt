@@ -1,9 +1,8 @@
 steps:
-  # Build with BuildKit and inline cache
+  # Build with BuildKit using buildx
   - name: 'gcr.io/cloud-builders/docker'
-    env:
-      - 'DOCKER_BUILDKIT=1'
     args:
+      - 'buildx'
       - 'build'
       - '--build-arg'
       - 'BUILDKIT_INLINE_CACHE=1'
@@ -15,6 +14,7 @@ steps:
       - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/gsopt:$SHORT_SHA'
       - '-t'
       - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/gsopt:latest'
+      - '--load'
       - '.'
 
   # Push images
