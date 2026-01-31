@@ -10,6 +10,7 @@ gcloud run deploy $SERVICE_NAME \
   --source . \
   --dockerfile Dockerfile \
   --region $REGION \
-  --no-allow-unauthenticated
+  --no-allow-unauthenticated \
+  --quiet
 
 echo "✅ Success!"

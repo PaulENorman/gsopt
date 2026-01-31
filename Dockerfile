@@ -45,9 +45,8 @@ ENV COMMIT_SHA=${COMMIT_SHA} \
 # Copy the virtual environment from the builder stage
 COPY --from=builder /opt/venv /opt/venv
 
-# Consolidate requirements and source code copying
-# This replaces the failing COPY gsopt/ call
-COPY --chown=appuser:appuser requirements.txt .
+# Copy application files (order by change frequency)
+# .dockerignore handles excluding unnecessary files
 COPY --chown=appuser:appuser . .
 
 # Security: Clean up
