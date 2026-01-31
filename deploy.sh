@@ -5,8 +5,11 @@ PROJECT_ID="gsopt-478412"
 REGION="europe-west1"
 SERVICE_NAME="gsopt"
 
-echo "🚀 Deploying to Cloud Run with BuildKit optimization..."
-# Use Cloud Build with cloudbuild.yaml to enable BuildKit caching
+echo "🚀 Starting deployment script..."
+echo "📂 Working directory: $(pwd)"
+echo "📄 Using cloudbuild.yaml..."
+
+# Force submission with the config
 gcloud builds submit --config cloudbuild.yaml --region $REGION .
 
 echo "✅ Success!"
