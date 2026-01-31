@@ -1,21 +1,28 @@
 steps:
-  # Build with BuildKit and inline cache
+  # Build with BuildKit enabled explicitly via environment and using newer builder
+  # Enable BuildKit
   - name: 'gcr.io/cloud-builders/docker'
+    args: ['version']
     env:
       - 'DOCKER_BUILDKIT=1'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
     args:
-      - 'build'
-      - '--build-arg'
-      - 'BUILDKIT_INLINE_CACHE=1'
-      - '--build-arg'
-      - 'COMMIT_SHA=$SHORT_SHA'
-      - '--cache-from'
-      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/gsopt:latest'
-      - '-t'
-      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/gsopt:$SHORT_SHA'
-      - '-t'
-      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/gsopt:latest'
-      - '.'
+      - '-c'
+      - |
+        docker buildx create --name mybuilder --use && \
+        docker buildx build \
+          --build-arg BUILDKIT_INLINE_CACHE=1 \
+          --build-arg COMMIT_SHA=$SHORT_SHA \
+          --cache-from europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/gsopt:latest \
+          -t europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/gsopt:$SHORT_SHA \
+          -t europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/gsopt:latest \
+          --load \
+          .
+    env:
+      - 'DOCKER_BUILDKIT=1'
+      - 'DOCKER_CLI_EXPERIMENTAL=enabled'
 
   # Push images
   - name: 'gcr.io/cloud-builders/docker'
