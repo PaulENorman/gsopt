@@ -1,3 +1,4 @@
+/** @OnlyCurrentDoc */
 const CLOUD_RUN_URL = 'https://gsopt-449559265504.europe-west1.run.app';
 const DATA_SHEET_NAME = 'Data';
 const SETTINGS_SHEET_NAME = 'Parameter Settings';

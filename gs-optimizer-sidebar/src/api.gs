@@ -1,3 +1,4 @@
+/** @OnlyCurrentDoc */
 /**
  * Unified Communication Layer for Cloud Run Backend
  * Implements request queuing, exponential backoff, and circuit breaker patterns

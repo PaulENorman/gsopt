@@ -16,13 +16,8 @@ The application is structured to be stateless, meaning that all necessary inform
 It uses a wrapper around the `scikit-optimize` library to perform the optimization.
 """
 
-from dataclasses import dataclass
-from typing import Dict, List, Any, Optional, Tuple
-import os
-import time
 from collections import defaultdict
 
-import jwt
 import numpy as np
 from flask import Flask, request, jsonify
 
@@ -84,88 +79,15 @@ def _ensure_optimizer_builder():
     """Lazy load optimizer building functions only when needed."""
     global _optimizer_builder_loaded
     if not _optimizer_builder_loaded:
-        from skopt_bayes import build_optimizer as build_skopt_optimizer
+        from skopt_bayes import build_optimizer as build_skopt_optimizer, OptimizerSettings
         globals()['build_skopt_optimizer'] = build_skopt_optimizer
+        globals()['OptimizerSettings'] = OptimizerSettings
         _optimizer_builder_loaded = True
 
-
-@dataclass
-class OptimizerSettings:
-    """
-    A data class to hold and validate all configuration settings for the optimizer.
-    This provides a structured way to manage the various parameters that control
-    the optimization process.
-    """
-    base_estimator: str
-    acquisition_function: str
-    acq_optimizer: str
-    acq_func_kwargs: Dict[str, Any]
-    num_params: int
-    param_names: List[str]
-    param_mins: List[float]
-    param_maxes: List[float]
-    num_init_points: int
-    batch_size: int
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'OptimizerSettings':
-        """
-        Factory method to create an OptimizerSettings instance from a dictionary.
-        It provides default values for missing keys to ensure robustness.
-        """
-        return cls(
-            base_estimator=data.get('base_estimator', 'GP'),
-            acquisition_function=data.get('acquisition_function', 'EI'),
-            acq_optimizer=data.get('acq_optimizer', 'auto'),
-            acq_func_kwargs=data.get('acq_func_kwargs', {}),
-            num_params=data.get('num_params', 0),
-            param_names=data.get('param_names', []),
-            param_mins=data.get('param_mins', []),
-            param_maxes=data.get('param_maxes', []),
-            num_init_points=data.get('num_init_points', 10),
-            batch_size=data.get('batch_size', 5)
-        )
-
-    def get_dimensions(self) -> Dict[str, Tuple[float, float]]:
-        """Returns the parameter search space as a dictionary."""
-        return {
-            name: (self.param_mins[i], self.param_maxes[i])
-            for i, name in enumerate(self.param_names)
-        }
-
-
-def build_optimizer(settings: OptimizerSettings, existing_data: Optional[List[Dict[str, Any]]] = None) -> Any:
-    """
-    Factory function to create and configure an optimizer instance.
-
-    This function acts as a dispatcher, selecting the appropriate optimizer
-    backend based on the `base_estimator` string (e.g., 'SKOPT-GP').
-    It then initializes the optimizer with the given settings and, if provided,
-    trains it on existing data.
-    """
+def build_optimizer(settings: Any, existing_data: Optional[List[Dict[str, Any]]] = None) -> Any:
+    """Dispatcher for building optimizer backends."""
     _ensure_optimizer_builder()
-    
-    optimizer_type = settings.base_estimator
-    
-    logger.info(f"Building optimizer: {optimizer_type}")
-    
-    if '-' in optimizer_type:
-        parts = optimizer_type.split('-', 1)
-        prefix, algo = parts[0].upper(), parts[1]
-        
-        if prefix == 'SKOPT':
-            return build_skopt_optimizer(
-                param_names=settings.param_names,
-                param_mins=settings.param_mins,
-                param_maxes=settings.param_maxes,
-                base_estimator=algo.upper(),
-                acquisition_function=settings.acquisition_function,
-                acq_optimizer=settings.acq_optimizer,
-                acq_func_kwargs=settings.acq_func_kwargs,
-                existing_data=existing_data
-            )
-
-    raise ValueError(f"Unknown or unsupported optimizer type: {optimizer_type}.")
+    return build_skopt_optimizer(settings, existing_data)
 
 def format_points_response(
     points: List[List[float]],
@@ -256,13 +178,10 @@ def continue_optimization() -> Tuple[Any, int]:
         logger.info(f"Received {len(existing_data)} data points from client")
         
         settings = OptimizerSettings.from_dict(settings_data)
-        
         optimizer = build_optimizer(settings, existing_data)
         
+        # skopt.Optimizer.ask(n_points=X) always returns a list of lists
         new_points = optimizer.ask(n_points=settings.batch_size)
-        
-        if len(new_points) > 0 and not isinstance(new_points[0], (list, np.ndarray)):
-            new_points = [new_points]
             
         logger.info(f"Generated {len(new_points)} new points")
         

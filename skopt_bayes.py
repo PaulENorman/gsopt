@@ -13,6 +13,7 @@ The main components are:
     into numpy arrays suitable for `scikit-optimize`.
 """
 
+from dataclasses import dataclass
 from typing import Dict, List, Any, Optional, Tuple
 import numpy as np
 from skopt import Optimizer
@@ -21,6 +22,36 @@ from skopt.space import Real
 from utils import setup_logging
 
 logger = setup_logging(__name__)
+
+
+@dataclass
+class OptimizerSettings:
+    """Configuration settings for the optimizer."""
+    base_estimator: str
+    acquisition_function: str
+    acq_optimizer: str
+    acq_func_kwargs: Dict[str, Any]
+    num_params: int
+    param_names: List[str]
+    param_mins: List[float]
+    param_maxes: List[float]
+    num_init_points: int
+    batch_size: int
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'OptimizerSettings':
+        return cls(
+            base_estimator=data.get('base_estimator', 'GP'),
+            acquisition_function=data.get('acquisition_function', 'EI'),
+            acq_optimizer=data.get('acq_optimizer', 'auto'),
+            acq_func_kwargs=data.get('acq_func_kwargs', {}),
+            num_params=data.get('num_params', 0),
+            param_names=data.get('param_names', []),
+            param_mins=data.get('param_mins', []),
+            param_maxes=data.get('param_maxes', []),
+            num_init_points=data.get('num_init_points', 10),
+            batch_size=data.get('batch_size', 5)
+        )
 
 
 class SkoptBayesianOptimizer:
@@ -164,39 +195,27 @@ def parse_training_data(
 
 
 def build_optimizer(
-    param_names: List[str],
-    param_mins: List[float],
-    param_maxes: List[float],
-    base_estimator: str = 'GP',
-    acquisition_function: str = 'EI',
-    acq_optimizer: str = 'auto',
-    acq_func_kwargs: Optional[Dict[str, Any]] = None,
+    settings: OptimizerSettings,
     existing_data: Optional[List[Dict[str, Any]]] = None
 ) -> SkoptBayesianOptimizer:
-    """
-    Factory function to construct and, if data is provided, train a
-    `SkoptBayesianOptimizer`.
+    """Constructs and trains the optimizer using settings object."""
+    # Handle the 'SKOPT-' prefix logic internally
+    algo = settings.base_estimator.split('-', 1)[1].upper() if '-' in settings.base_estimator else settings.base_estimator.upper()
     
-    This function orchestrates the creation of the optimizer and the subsequent
-    training (the 'tell' step) if there is existing data.
-    
-    Returns:
-        A configured and potentially trained `SkoptBayesianOptimizer` instance.
-    """
     optimizer = SkoptBayesianOptimizer(
-        param_names=param_names,
-        param_mins=param_mins,
-        param_maxes=param_maxes,
-        base_estimator=base_estimator,
-        acquisition_function=acquisition_function,
-        acq_optimizer=acq_optimizer,
-        acq_func_kwargs=acq_func_kwargs
+        param_names=settings.param_names,
+        param_mins=settings.param_mins,
+        param_maxes=settings.param_maxes,
+        base_estimator=algo,
+        acquisition_function=settings.acquisition_function,
+        acq_optimizer=settings.acq_optimizer,
+        acq_func_kwargs=settings.acq_func_kwargs,
+        n_initial_points=settings.num_init_points
     )
     
     if existing_data:
-        x_train, y_train = parse_training_data(existing_data, param_names)
+        x_train, y_train = parse_training_data(existing_data, settings.param_names)
         if x_train:
             optimizer.tell(x_train, y_train)
-            logger.info("Successfully trained the optimizer with the provided existing data.")
     
     return optimizer

@@ -23,10 +23,10 @@ You will receive a response within 48 hours.
 ## Security Measures
 
 ### Authentication
-- All endpoints require valid Google OAuth2 tokens
+- All endpoints require a valid 'X-User-Email' header
 - Only @gmail.com email domains are allowed
-- JWT tokens are validated against Google's public keys
-- Token expiration is enforced
+- Infrastructure ensures requests originate from authorized Google Workspace environments
+- No user tokens or PII are stored on the server (stateless architecture)
 
 ### Input Validation
 - All user inputs are validated and sanitized

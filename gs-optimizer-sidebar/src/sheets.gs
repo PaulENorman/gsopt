@@ -1,3 +1,4 @@
+/** @OnlyCurrentDoc */
 /**
  * Extracts content within parentheses, e.g., "Gaussian Process (GP)" -> "GP".
  */

@@ -1,3 +1,4 @@
+/** @OnlyCurrentDoc */
 /**
  * Main entry point for the GSOpt application.
  * Consolidates menu creation logic to avoid dependency on external macros.
