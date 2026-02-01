@@ -1,4 +1,3 @@
-/** @OnlyCurrentDoc */
 /**
  * Unified Communication Layer for Cloud Run Backend
  * Implements request queuing, exponential backoff, and circuit breaker patterns
@@ -34,15 +33,14 @@ function pingServer() {
   }
 
   try {
-    const userEmail = Session.getActiveUser().getEmail();
+    const userEmail = Session.getEffectiveUser().getEmail();
     
     const options = {
       method: 'post',
       contentType: 'application/json',
       payload: JSON.stringify({}),
       headers: {
-        'X-User-Email': userEmail,
-        'Authorization': 'Bearer ' + ScriptApp.getIdentityToken()
+        'X-User-Email': userEmail
       },
       muteHttpExceptions: true
     };
@@ -113,6 +111,7 @@ function continueOptimization(existingData) {
 function callCloudRunEndpoint(endpoint, payload, progressMessage) {
   const ui = SpreadsheetApp.getUi();
   const userEmail = Session.getActiveUser().getEmail();
+  EffectiveUser().getEmail();
   
   if (!userEmail || !userEmail.endsWith('@gmail.com')) {
     ui.alert('Authentication Error',
@@ -124,17 +123,7 @@ function callCloudRunEndpoint(endpoint, payload, progressMessage) {
   // Pre-ping server to reduce cold start latency
   pingServer();
   
-  let token = '';
-  try {
-    token = ScriptApp.getIdentityToken();
-    console.log('Successfully generated identity token');
-  } catch (e) {
-    console.error('Failed to get identity token:', e);
-  }
-
-  const headers = { 'X-User-Email': userEmail };
-  if (token) headers['Authorization'] = 'Bearer ' + token;
-
+  const headers = { 'X-User-Email': userEmail }
   const options = {
     method: 'post',
     contentType: 'application/json',
