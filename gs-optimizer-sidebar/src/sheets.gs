@@ -142,7 +142,7 @@ function showSkoptPlotDialog(plotType, title) {
 function getPlotData(plotType) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheetInfo = readOptimizerSettings();
-  const userEmail = Session.getActiveUser().getEmail();
+  const userEmail = Session.getEffectiveUser().getEmail();
   const dataSheet = ss.getSheetByName(DATA_SHEET_NAME);
   
   if (!dataSheet) throw new Error("Data sheet not found");
@@ -258,7 +258,7 @@ function getInitialSettings() {
 
 function testCloudRunConnection() {
   try {
-    const userEmail = Session.getActiveUser().getEmail();
+    const userEmail = Session.getEffectiveUser().getEmail();
     const options = {
       method: 'post',
       contentType: 'application/json',
@@ -292,7 +292,7 @@ function testCloudRunConnection() {
 function suggestNextPoints(sidebarSettings, isInit) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheetInfo = readOptimizerSettings();
-  const userEmail = Session.getActiveUser().getEmail();
+  const userEmail = Session.getEffectiveUser().getEmail();
   
   const settings = {
     ...sheetInfo,

@@ -34,13 +34,15 @@ function pingServer() {
 
   try {
     const userEmail = Session.getEffectiveUser().getEmail();
+    const token = ScriptApp.getIdentityToken();
     
     const options = {
       method: 'post',
       contentType: 'application/json',
       payload: JSON.stringify({}),
       headers: {
-        'X-User-Email': userEmail
+        'X-User-Email': userEmail,
+        'Authorization': 'Bearer ' + token
       },
       muteHttpExceptions: true
     };
@@ -80,11 +82,17 @@ function pingServer() {
  * Logic for calling the optimizer API.
  */
 function callOptimizerApi(endpoint, payload) {
+  const userEmail = Session.getEffectiveUser().getEmail();
+  const token = ScriptApp.getIdentityToken();
   const options = {
     method: 'post',
     contentType: 'application/json',
     payload: JSON.stringify(payload),
-    muteHttpExceptions: true
+    muteHttpExceptions: true,
+    headers: {
+      'X-User-Email': userEmail,
+      'Authorization': 'Bearer ' + token
+    }
   };
   
   const response = UrlFetchApp.fetch(CLOUD_RUN_URL + endpoint, options);
@@ -110,8 +118,7 @@ function continueOptimization(existingData) {
  */
 function callCloudRunEndpoint(endpoint, payload, progressMessage) {
   const ui = SpreadsheetApp.getUi();
-  const userEmail = Session.getActiveUser().getEmail();
-  EffectiveUser().getEmail();
+  const userEmail = Session.getEffectiveUser().getEmail();
   
   if (!userEmail || !userEmail.endsWith('@gmail.com')) {
     ui.alert('Authentication Error',
@@ -123,7 +130,12 @@ function callCloudRunEndpoint(endpoint, payload, progressMessage) {
   // Pre-ping server to reduce cold start latency
   pingServer();
   
-  const headers = { 'X-User-Email': userEmail }
+  const token = ScriptApp.getIdentityToken();
+  const headers = { 
+    'X-User-Email': userEmail,
+    'Authorization': 'Bearer ' + token
+  };
+
   const options = {
     method: 'post',
     contentType: 'application/json',
