@@ -1,10 +1,14 @@
 """
-This module provides utility functions for logging and request authentication.
+This module provides utility functions that are shared across the application,
+primarily focusing on logging configuration and request authentication.
 
 The key functions are:
--   `setup_logging`: Configures standardized logger.
--   `authenticate_request`: Validates user identity via custom Gmail-based 
-    headers for stateless processing.
+-   `setup_logging`: Configures a standardized logger for consistent output
+    formatting throughout the application.
+-   `authenticate_request`: Handles the authentication of incoming requests by
+    checking for user identity in specific HTTP headers or a JWT Bearer token.
+    It is designed to work with Google Cloud Run's identity-aware proxy and
+    custom headers sent from Google Apps Script.
 """
 
 import logging
